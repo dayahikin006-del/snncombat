@@ -1,0 +1,2618 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>SNN Combat · ver.1.0.0</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@400;600;700;900&family=Caveat:wght@400;700&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+* { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.selectable-num, input, textarea { -webkit-user-select:text; user-select:text; -webkit-touch-callout:default; }
+:root {
+    --accent:#6b4e9b; --accent-light:#b8a0d0;
+    --bg-primary:#eef2f6; --bg-secondary:#d9e2ec;
+    --card-bg:rgba(255,255,255,0.6);
+    --text-primary:#1e293b; --text-secondary:#3b5b6b;
+    --radius-card:32px; --radius-btn:44px; --radius-small:18px;
+    --blur-strength:24px; --shadow-strength:0.15;
+    --font-family-main:'Inter', system-ui, sans-serif;
+    --font-family-mono:'JetBrains Mono', monospace;
+}
+html, body { height:100%; margin:0; padding:0; }
+body {
+    min-height:100vh; background:#eef2f6;
+    font-family:var(--font-family-main); color:var(--text-primary);
+    transition:background 0.4s ease, color 0.3s ease;
+    overflow-x:hidden; -webkit-tap-highlight-color:transparent;
+}
+body.dark-theme {
+    --bg-primary:#0b1120; --bg-secondary:#1a2a3a;
+    --card-bg:rgba(15,25,40,0.75);
+    --text-primary:#e2e8f0; --text-secondary:#94a3b8;
+    --shadow-strength:0.35; background:#0b1120;
+}
+/* УБРАН ГРАДИЕНТ СНИЗУ — сплошной фон */
+.app-container {
+    max-width:560px; margin:0 auto; padding:0 0 20px;
+    min-height:100vh; position:relative;
+    background:var(--bg-primary);
+}
+body.dark-theme .app-container { background:#0b1120; }
+
+/* ХЕДЕР */
+.header-wrapper {
+    position:sticky; top:0; z-index:100;
+    padding:0 16px; min-height:72px; display:flex; align-items:center;
+    transition:min-height 0.35s cubic-bezier(0.4,0,0.2,1);
+}
+.header-wrapper.top { min-height:96px; padding-top:8px; padding-bottom:8px; }
+.header-inner {
+    display:flex; align-items:center; gap:10px;
+    width:100%; padding:8px 14px;
+    border-radius:var(--radius-small);
+    background:transparent; border:1px solid transparent;
+    transition:background 0.35s, border-color 0.35s, box-shadow 0.35s;
+}
+.header-wrapper.scrolled .header-inner {
+    background:var(--card-bg);
+    backdrop-filter:blur(var(--blur-strength)) saturate(180%);
+    -webkit-backdrop-filter:blur(var(--blur-strength)) saturate(180%);
+    border-color:rgba(255,255,255,0.6);
+    box-shadow:0 6px 20px rgba(0,0,0,0.08);
+}
+body.dark-theme .header-wrapper.scrolled .header-inner { border-color:rgba(255,255,255,0.08); }
+.header-logo {
+    font-family:var(--font-family-mono); font-weight:700; font-size:1.8rem;
+    background:linear-gradient(145deg, var(--text-primary), var(--accent));
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    letter-spacing:-1px; line-height:1.2; cursor:pointer;
+    transition:font-size 0.35s; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis; flex-shrink:1; min-width:0;
+}
+.header-wrapper.scrolled .header-logo { font-size:0.9rem; letter-spacing:-0.3px; }
+.header-actions { display:flex; gap:6px; margin-left:auto; flex-shrink:0; }
+.header-btn {
+    width:34px; height:34px; border-radius:50%;
+    border:1px solid rgba(255,255,255,0.7);
+    background:rgba(255,255,255,0.4);
+    cursor:pointer; font-size:1rem;
+    display:flex; align-items:center; justify-content:center;
+    transition:all 0.2s; padding:0; overflow:hidden;
+}
+body.dark-theme .header-btn { background:rgba(30,40,60,0.6); border-color:rgba(255,255,255,0.15); }
+.header-btn:hover { transform:scale(1.08); }
+.header-btn:active { transform:scale(0.92); }
+.header-avatar {
+    width:100%; height:100%; border-radius:50%;
+    background:linear-gradient(135deg, var(--accent), var(--accent-light));
+    background-size:cover; background-position:center;
+    display:flex; align-items:center; justify-content:center;
+    color:white; font-weight:700; font-size:0.85rem;
+}
+
+/* КОНТЕНТ */
+.content-area { padding:0 16px; margin-top:4px; }
+.level-flash { animation:levelGlow 0.6s ease-out; }
+@keyframes levelGlow {
+    0%,100% { box-shadow:0 0 0 0 rgba(255,255,255,0); }
+    30% { box-shadow:0 0 24px 10px rgba(180,200,255,0.6); }
+}
+@keyframes floatUp {
+    0% { opacity:1; transform:translateY(0) scale(1); }
+    100% { opacity:0; transform:translateY(-60px) scale(1.4); }
+}
+.float-text {
+    position:absolute; pointer-events:none; font-weight:700;
+    color:var(--accent); font-size:1.1rem; z-index:100;
+    animation:floatUp 0.8s ease-out forwards;
+}
+.clicker-card {
+    width:100%; background:var(--card-bg);
+    backdrop-filter:blur(var(--blur-strength)) saturate(180%);
+    -webkit-backdrop-filter:blur(var(--blur-strength)) saturate(180%);
+    border-radius:var(--radius-card); padding:16px 16px 20px;
+    box-shadow:0 20px 40px -10px rgba(0,0,0,var(--shadow-strength)), 0 0 0 1px rgba(255,255,255,0.5) inset;
+    border:1px solid rgba(255,255,255,0.4);
+    color:var(--text-primary); position:relative;
+}
+body.dark-theme .clicker-card { border-color:rgba(255,255,255,0.08); }
+.version-signature {
+    position:absolute; bottom:8px; right:16px;
+    font-family:var(--font-family-mono); font-size:0.6rem;
+    color:var(--text-secondary); opacity:0.5; pointer-events:none;
+}
+
+/* ПРОФИЛЬ-БАР */
+.profile-bar {
+    display:flex; align-items:center; gap:10px;
+    margin-bottom:10px; padding:10px;
+    background:rgba(255,255,255,0.25);
+    border-radius:var(--radius-small);
+    border:1px solid rgba(255,255,255,0.4);
+    cursor:pointer; transition:background 0.2s;
+}
+body.dark-theme .profile-bar { background:rgba(30,40,60,0.5); border-color:rgba(255,255,255,0.08); }
+.profile-bar-avatar {
+    width:46px; height:46px; border-radius:50%;
+    background:linear-gradient(135deg, var(--accent), var(--accent-light));
+    background-size:cover; background-position:center;
+    flex-shrink:0; display:flex; align-items:center; justify-content:center;
+    color:white; font-weight:700; font-size:1.1rem;
+    border:2px solid rgba(255,255,255,0.5);
+}
+.profile-bar-info { flex:1; min-width:0; }
+.profile-bar-name { font-weight:700; font-size:1rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.profile-bar-address {
+    font-family:var(--font-family-mono); font-size:0.75rem;
+    color:var(--text-secondary);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    cursor:pointer;
+}
+.profile-bar-address.sbk { cursor:pointer; }
+.profile-bar-address:active { opacity:0.7; }
+.profile-bar-level {
+    background:rgba(255,255,255,0.5); padding:4px 10px;
+    border-radius:30px; font-size:0.75rem; font-weight:700;
+    color:var(--accent); font-family:var(--font-family-mono);
+}
+body.dark-theme .profile-bar-level { background:rgba(0,0,0,0.35); }
+
+/* РЕДКОСТИ */
+.rarity-text-legendary-gold { background:linear-gradient(90deg, #FFD700, #FFF8A8, #FFD700); -webkit-background-clip:text; background-clip:text; color:transparent; font-weight:800; }
+.rarity-text-legendary-silver { background:linear-gradient(90deg, #C0C0C0, #F0F0F0, #C0C0C0); -webkit-background-clip:text; background-clip:text; color:transparent; font-weight:800; }
+.rarity-text-epic { color:#a855f7; font-weight:700; }
+.rarity-text-rare { color:#3b82f6; font-weight:600; }
+.rarity-text-uncommon { color:#10b981; }
+.rarity-text-common { color:var(--text-primary); }
+.rarity-badge-legendary { background:linear-gradient(135deg, #FFD700, #FF8C00); color:#2b1f00; }
+.rarity-badge-epic { background:linear-gradient(135deg, #a855f7, #7c3aed); color:white; }
+.rarity-badge-rare { background:linear-gradient(135deg, #3b82f6, #1d4ed8); color:white; }
+.rarity-badge-uncommon { background:linear-gradient(135deg, #10b981, #059669); color:white; }
+.rarity-badge-common { background:rgba(100,116,139,0.3); color:var(--text-primary); }
+
+/* ЭНЕРГИЯ */
+.energy-section { margin-bottom:8px; }
+.energy-bar-bg { height:12px; background:rgba(255,255,255,0.4); border-radius:16px; overflow:hidden; }
+body.dark-theme .energy-bar-bg { background:rgba(0,0,0,0.3); }
+.energy-bar-fill {
+    height:100%; width:100%;
+    background:linear-gradient(90deg, #2ecc71, #27ae60);
+    border-radius:16px; transition:width 0.3s ease, background 0.3s;
+}
+.energy-bar-fill.low { background:linear-gradient(90deg, #e74c3c, #c0392b); }
+.energy-bar-fill.medium { background:linear-gradient(90deg, #f39c12, #e67e22); }
+.energy-label {
+    display:flex; justify-content:space-between;
+    font-size:0.7rem; margin-top:3px;
+    color:var(--text-secondary); font-family:var(--font-family-mono);
+}
+/* НОВОЕ: стрик-лейбл красным под батарейкой */
+.streak-label {
+    font-size:0.7rem; margin-top:3px; color:#e74c3c;
+    font-weight:600; text-align:left;
+    font-family:var(--font-family-mono);
+    min-height:14px; transition:opacity 0.3s;
+}
+.streak-label.hidden { opacity:0; }
+
+.progress-section { margin-bottom:8px; }
+.progress-label {
+    display:flex; justify-content:space-between;
+    font-size:0.7rem; margin-bottom:3px;
+    font-family:var(--font-family-mono);
+}
+.progress-bar-bg { height:6px; background:rgba(255,255,255,0.4); border-radius:14px; overflow:hidden; }
+body.dark-theme .progress-bar-bg { background:rgba(0,0,0,0.3); }
+.progress-bar-fill {
+    height:100%; width:0%;
+    background:linear-gradient(90deg, var(--accent), var(--accent-light));
+    border-radius:14px; transition:width 0.4s ease;
+}
+
+/* СЧЕТ */
+.score-panel {
+    background:rgba(255,255,255,0.3); border-radius:26px;
+    padding:12px 14px; margin-bottom:10px;
+    border:1px solid rgba(255,255,255,0.5);
+}
+body.dark-theme .score-panel { background:rgba(30,40,60,0.4); border-color:rgba(255,255,255,0.06); }
+.currency-label { font-size:0.7rem; letter-spacing:1px; opacity:0.7; }
+.score-value {
+    font-weight:800; font-size:2.6rem; line-height:1.1;
+    word-break:break-word; padding:0; font-family:var(--font-family-mono);
+}
+.per-click-info { display:flex; flex-wrap:wrap; justify-content:center; gap:6px 10px; margin-top:8px; font-size:0.78rem; }
+.per-click-info span {
+    background:rgba(255,255,255,0.5); padding:4px 12px;
+    border-radius:30px; border:1px solid rgba(255,255,255,0.6);
+    white-space:nowrap;
+}
+body.dark-theme .per-click-info span { background:rgba(0,0,0,0.25); border-color:rgba(255,255,255,0.08); }
+
+/* КНОПКИ */
+.btn-primary {
+    width:100%; background:linear-gradient(135deg, var(--accent), var(--accent-light));
+    border:none; border-radius:var(--radius-btn);
+    padding:20px 10px; font-weight:800; font-size:1.6rem; color:white;
+    box-shadow:0 10px 24px -8px rgba(0,0,0,0.3), inset 0 2px 8px rgba(255,255,255,0.25);
+    cursor:pointer; text-transform:uppercase; margin-bottom:8px;
+    transition:transform 0.12s, opacity 0.3s, filter 0.3s;
+    letter-spacing:1px;
+}
+.btn-primary:active { transform:scale(0.97); filter:brightness(0.9); }
+.btn-primary.no-energy { opacity:0.4; filter:grayscale(0.7); cursor:not-allowed; }
+.btn-recharge {
+    width:100%; background:rgba(52,152,219,0.9);
+    border:none; border-radius:30px; padding:9px;
+    font-weight:600; font-size:0.8rem; color:white;
+    cursor:pointer; margin-bottom:10px; transition:opacity 0.3s;
+}
+.btn-recharge:disabled { opacity:0.4; cursor:not-allowed; }
+.offline-banner {
+    background:linear-gradient(135deg, #ffd700, #ffaa00);
+    border-radius:14px; padding:10px 14px; margin-bottom:8px;
+    text-align:center; font-weight:600; font-size:0.8rem;
+    color:#3b2e0a; display:none;
+}
+
+/* УЛУЧШЕНИЯ — СВОРАЧИВАЕМЫЕ */
+.section-header {
+    font-weight:700; font-size:0.9rem; margin:12px 0 8px;
+    color:var(--text-primary); display:flex; align-items:center; gap:6px;
+    cursor:pointer; user-select:none;
+    justify-content:space-between;
+    padding:4px 0;
+}
+.section-header .arrow {
+    font-size:0.7rem; transition:transform 0.3s cubic-bezier(0.4,0,0.2,1);
+    color:var(--text-secondary);
+}
+.section-header.collapsed .arrow { transform:rotate(-90deg); }
+.upgrades-wrapper {
+    overflow:hidden;
+    max-height:1000px;
+    opacity:1;
+    transition:max-height 0.4s cubic-bezier(0.4,0,0.2,1), opacity 0.3s ease;
+}
+.upgrades-wrapper.collapsed {
+    max-height:0;
+    opacity:0;
+}
+.upgrade-item {
+    background:rgba(255,255,255,0.3); border-radius:22px;
+    padding:10px 14px; border:1px solid rgba(255,255,255,0.5);
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:6px; font-size:0.85rem; gap:8px;
+}
+body.dark-theme .upgrade-item { background:rgba(30,40,60,0.4); border-color:rgba(255,255,255,0.06); }
+.upgrade-info { flex:1; min-width:0; }
+.upgrade-name { font-weight:700; font-size:0.88rem; }
+.upgrade-desc { font-size:0.68rem; opacity:0.75; margin-top:2px; font-family:var(--font-family-mono); }
+.upgrade-action { display:flex; align-items:center; gap:6px; flex-shrink:0; }
+.upgrade-cost {
+    background:rgba(0,90,150,0.1); border-radius:30px;
+    padding:4px 10px; font-weight:600; font-size:0.7rem;
+    color:var(--accent); font-family:var(--font-family-mono);
+}
+body.dark-theme .upgrade-cost { background:rgba(120,150,200,0.15); }
+.btn-upgrade {
+    background:rgba(255,255,255,0.85);
+    border:1px solid rgba(255,255,255,0.8);
+    border-radius:30px; padding:6px 14px;
+    font-weight:700; font-size:0.72rem; color:#1a3e60;
+    cursor:pointer; transition:all 0.15s;
+}
+body.dark-theme .btn-upgrade { background:rgba(60,80,110,0.7); color:#e0e8f0; border-color:rgba(255,255,255,0.15); }
+.btn-upgrade.disabled { opacity:0.35; pointer-events:none; }
+.btn-upgrade:not(.disabled):active { transform:scale(0.95); }
+
+/* ОБМЕННИК */
+.exchanger-panel {
+    background:rgba(255,255,240,0.3); border-radius:18px;
+    padding:12px; border:1px solid rgba(255,255,255,0.5); margin-bottom:8px;
+}
+body.dark-theme .exchanger-panel { background:rgba(30,40,60,0.4); border-color:rgba(255,255,255,0.06); }
+.sbc-display { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; }
+.sbc-value { font-size:1.2rem; font-weight:800; color:var(--accent); font-family:var(--font-family-mono); }
+.exchange-btn {
+    background:linear-gradient(135deg, var(--accent), var(--accent-light));
+    border:none; border-radius:30px; padding:9px 14px;
+    font-weight:700; color:white; width:100%;
+    cursor:pointer; font-size:0.85rem;
+}
+.exchange-btn:disabled { opacity:0.5; pointer-events:none; }
+
+/* OVERLAY */
+.overlay-backdrop {
+    position:fixed; inset:0;
+    background:rgba(0,0,0,0.55); z-index:200;
+    opacity:0; pointer-events:none;
+    transition:opacity 0.35s ease; backdrop-filter:blur(4px);
+}
+.overlay-backdrop.active { opacity:1; pointer-events:auto; }
+.bottom-sheet {
+    position:fixed; bottom:0; left:0; right:0;
+    background:var(--bg-primary); border-radius:28px 28px 0 0;
+    padding:20px 20px 32px; z-index:300;
+    transform:translateY(100%);
+    transition:transform 0.45s cubic-bezier(0.32, 0.72, 0, 1);
+    max-height:92vh; overflow-y:auto;
+    box-shadow:0 -20px 60px rgba(0,0,0,0.3);
+    border-top:1px solid rgba(255,255,255,0.4);
+}
+body.dark-theme .bottom-sheet { background:#0f1825; border-top-color:rgba(255,255,255,0.08); }
+.bottom-sheet.active { transform:translateY(0); }
+.bottom-sheet-handle {
+    width:42px; height:4px; background:rgba(0,0,0,0.15);
+    border-radius:2px; margin:0 auto 16px;
+}
+body.dark-theme .bottom-sheet-handle { background:rgba(255,255,255,0.15); }
+.bottom-sheet h3 { text-align:center; margin-bottom:18px; font-size:1.15rem; font-weight:700; }
+#profileSheet { padding:20px 0 32px; }
+#profileSheet .bottom-sheet-handle { margin-bottom:0; }
+#profileSheetContent { padding:0; }
+.btn-action {
+    display:block; width:100%; padding:13px;
+    border-radius:22px; font-weight:700; font-size:0.9rem;
+    cursor:pointer; border:none; margin-bottom:8px;
+    text-align:center; transition:all 0.2s;
+}
+.btn-primary-action {
+    background:linear-gradient(135deg, var(--accent), var(--accent-light));
+    color:white; box-shadow:0 8px 20px -8px rgba(0,0,0,0.3);
+}
+.btn-primary-action:active { transform:scale(0.98); filter:brightness(0.9); }
+.btn-secondary-action { background:rgba(0,0,0,0.05); color:var(--text-primary); }
+body.dark-theme .btn-secondary-action { background:rgba(255,255,255,0.08); color:var(--text-primary); }
+.btn-secondary-action:active { transform:scale(0.98); }
+
+/* ПРОФИЛЬ */
+.profile-view { text-align:left; padding:0 20px; }
+.profile-banner {
+    width:100vw; max-width:100%; height:160px;
+    background:linear-gradient(135deg, var(--accent), var(--accent-light));
+    background-size:cover; background-position:center;
+    border-radius:28px 28px 0 0; margin:0;
+    position:relative; overflow:hidden;
+}
+.profile-banner-inner { padding:0 20px; position:relative; margin-top:-48px; }
+.profile-avatar-big {
+    width:96px; height:96px; border-radius:50%;
+    border:4px solid var(--bg-primary);
+    background:linear-gradient(135deg, var(--accent), var(--accent-light));
+    background-size:cover; background-position:center;
+    position:relative; display:flex; align-items:center; justify-content:center;
+    color:white; font-weight:800; font-size:2.2rem;
+    cursor:pointer; box-shadow:0 4px 16px rgba(0,0,0,0.2); z-index:2;
+}
+body.dark-theme .profile-avatar-big { border-color:#0f1825; }
+.profile-avatar-big::after {
+    content:'📷'; position:absolute; bottom:0; right:0;
+    width:28px; height:28px; background:var(--accent);
+    border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-size:0.85rem; border:2px solid var(--bg-primary);
+}
+body.dark-theme .profile-avatar-big::after { border-color:#0f1825; }
+.profile-text-block { margin-top:12px; text-align:left; }
+.profile-displayname {
+    font-size:1.5rem; font-weight:800;
+    letter-spacing:-0.5px; line-height:1.2; text-align:left;
+}
+.profile-username {
+    font-family:var(--font-family-mono); font-size:0.9rem;
+    margin-top:4px; font-weight:600;
+    word-break:break-all; text-align:left;
+    cursor:pointer;
+}
+.profile-username:active { opacity:0.7; }
+.profile-username.none { color:var(--text-secondary); opacity:0.7; font-style:italic; }
+.profile-desc {
+    font-size:0.85rem; color:var(--text-secondary);
+    margin-top:10px; line-height:1.5; word-break:break-word; text-align:left;
+}
+.profile-tags { display:flex; flex-wrap:wrap; justify-content:flex-start; gap:6px; margin-top:12px; }
+.profile-tag {
+    background:rgba(0,0,0,0.05); border:1px solid rgba(0,0,0,0.08);
+    padding:5px 12px; border-radius:30px; font-size:0.75rem; font-weight:500;
+}
+body.dark-theme .profile-tag { background:rgba(255,255,255,0.08); border-color:rgba(255,255,255,0.1); }
+.profile-stats {
+    display:grid; grid-template-columns:repeat(3, 1fr); gap:8px;
+    margin-top:16px; padding:14px;
+    background:rgba(255,255,255,0.3); border-radius:20px;
+    border:1px solid rgba(255,255,255,0.4);
+}
+body.dark-theme .profile-stats { background:rgba(30,40,60,0.5); border-color:rgba(255,255,255,0.06); }
+.profile-stat { text-align:center; }
+.profile-stat-value { font-family:var(--font-family-mono); font-size:1rem; font-weight:800; color:var(--accent); }
+.profile-stat-label { font-size:0.65rem; color:var(--text-secondary); margin-top:2px; }
+.profile-actions { display:flex; gap:8px; margin-top:14px; }
+.profile-actions .btn-action { margin:0; flex:1; }
+
+/* ТЕРМИНАЛ */
+.terminal {
+    background:#0a0e14; border-radius:16px; padding:12px;
+    margin:12px 0; font-family:var(--font-family-mono); font-size:0.75rem;
+    color:#00ff88; border:1px solid rgba(0,255,136,0.2);
+    box-shadow:inset 0 0 30px rgba(0,255,136,0.05);
+    max-height:240px; overflow-y:auto; line-height:1.5;
+    word-break:break-word; display:flex; flex-direction:column; gap:2px;
+}
+.terminal-log { flex:1; overflow-y:auto; white-space:pre-wrap; word-break:break-word; min-height:100px; max-height:180px; }
+.terminal-line { margin-bottom:2px; }
+.terminal-line.user-text { color:#e0e0e0; }
+.terminal-line.system { color:#888; }
+.terminal-line.success { color:#00ff88; }
+.terminal-line.error { color:#ff6b6b; }
+.terminal-line.info { color:#5dade2; }
+.terminal-input-row {
+    display:flex; align-items:center;
+    border-top:1px solid rgba(0,255,136,0.15);
+    padding-top:8px; margin-top:4px;
+    position:sticky; bottom:0; background:#0a0e14;
+}
+.terminal-prompt { color:#00ff88; font-weight:700; margin-right:8px; font-size:0.85rem; flex-shrink:0; }
+.terminal-input {
+    flex:1; background:transparent; border:none; outline:none;
+    color:#e0e0e0; font-family:var(--font-family-mono); font-size:0.8rem;
+    padding:6px 0; -webkit-user-select:text; user-select:text; caret-color:#00ff88;
+}
+.terminal-input::placeholder { color:#444; }
+
+/* COLOR PICKER */
+.color-grid { display:grid; grid-template-columns:repeat(6, 1fr); gap:8px; margin:12px 0; }
+.color-swatch {
+    aspect-ratio:1; border-radius:14px; cursor:pointer;
+    border:2px solid transparent; transition:transform 0.15s;
+}
+.color-swatch:hover { transform:scale(1.08); }
+.color-swatch.selected { border-color:white; box-shadow:0 0 0 2px var(--accent); }
+
+/* ОБМЕННИК */
+.exchange-presets { display:grid; grid-template-columns:1fr; gap:6px; margin-bottom:12px; }
+.exchange-preset {
+    display:flex; justify-content:space-between; align-items:center;
+    padding:12px 16px; background:rgba(255,255,255,0.4);
+    border-radius:16px; border:1px solid rgba(255,255,255,0.5);
+    cursor:pointer; transition:all 0.2s; font-size:0.85rem;
+}
+body.dark-theme .exchange-preset { background:rgba(30,40,60,0.5); border-color:rgba(255,255,255,0.06); }
+.exchange-preset:active { transform:scale(0.98); }
+.exchange-preset-left { font-weight:600; }
+.exchange-preset-right { color:var(--accent); font-weight:700; font-family:var(--font-family-mono); }
+.exchange-custom {
+    background:rgba(255,255,255,0.3); border-radius:16px;
+    padding:12px; margin-bottom:12px; border:1px solid rgba(255,255,255,0.4);
+}
+body.dark-theme .exchange-custom { background:rgba(30,40,60,0.5); }
+.input-with-label { margin-bottom:10px; }
+.input-with-label label {
+    display:block; font-size:0.7rem; color:var(--text-secondary);
+    margin-bottom:4px; font-family:var(--font-family-mono);
+}
+.input-with-label input {
+    width:100%; padding:10px 14px; border-radius:14px;
+    border:1px solid rgba(0,0,0,0.1); background:rgba(255,255,255,0.8);
+    font-family:var(--font-family-mono); font-size:0.9rem;
+    outline:none; color:var(--text-primary);
+}
+body.dark-theme .input-with-label input { background:rgba(0,0,0,0.3); border-color:rgba(255,255,255,0.1); color:white; }
+
+/* EDIT FIELDS */
+.edit-field { margin-bottom:12px; }
+.edit-field label {
+    display:block; font-size:0.7rem; color:var(--text-secondary);
+    margin-bottom:5px; text-transform:uppercase; letter-spacing:0.5px;
+    font-family:var(--font-family-mono); font-weight:600;
+}
+.edit-field input, .edit-field textarea {
+    width:100%; padding:11px 14px; border-radius:16px;
+    border:1px solid rgba(0,0,0,0.1); background:rgba(255,255,255,0.7);
+    font-size:0.9rem; outline:none; font-family:inherit;
+    color:var(--text-primary); resize:vertical;
+}
+body.dark-theme .edit-field input, body.dark-theme .edit-field textarea {
+    background:rgba(0,0,0,0.3); border-color:rgba(255,255,255,0.1); color:white;
+}
+
+/* SBK SEARCH */
+.search-box { display:flex; gap:6px; margin-bottom:12px; }
+.search-box input {
+    flex:1; padding:12px 16px; border-radius:16px;
+    border:1px solid rgba(0,0,0,0.1); background:rgba(255,255,255,0.8);
+    font-family:var(--font-family-mono); font-size:0.9rem;
+    outline:none; color:var(--text-primary);
+}
+body.dark-theme .search-box input { background:rgba(0,0,0,0.3); border-color:rgba(255,255,255,0.1); color:white; }
+.search-box .suffix {
+    display:flex; align-items:center; padding:0 14px;
+    background:rgba(255,255,255,0.8); border-radius:16px;
+    font-family:var(--font-family-mono); font-weight:700;
+    color:var(--accent); border:1px solid rgba(0,0,0,0.1);
+}
+body.dark-theme .search-box .suffix { background:rgba(0,0,0,0.3); border-color:rgba(255,255,255,0.1); }
+.rarity-badge { padding:5px 12px; border-radius:30px; font-size:0.7rem; font-weight:800; letter-spacing:0.5px; display:inline-block; }
+
+/* CUSTOMIZE */
+.custom-section {
+    background:rgba(255,255,255,0.3); border-radius:18px;
+    padding:14px; margin-bottom:10px; border:1px solid rgba(255,255,255,0.4);
+}
+body.dark-theme .custom-section { background:rgba(30,40,60,0.5); border-color:rgba(255,255,255,0.06); }
+.custom-section .section-label { font-size:0.75rem; font-weight:700; margin-bottom:10px; color:var(--text-primary); }
+.custom-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(54px, 1fr)); gap:6px; }
+.custom-preset {
+    aspect-ratio:1; border-radius:14px; cursor:pointer;
+    border:2px solid transparent; transition:transform 0.15s;
+}
+.custom-preset:hover { transform:scale(1.05); }
+.custom-preset.selected { border-color:white; box-shadow:0 0 0 2px var(--accent); }
+.custom-preset.preset-default { background:linear-gradient(135deg, #6b4e9b, #b8a0d0); }
+.custom-preset.preset-discord { background:linear-gradient(135deg, #5865f2, #23272a); }
+.custom-preset.preset-apple { background:linear-gradient(135deg, #f5f5f7, #c0c0c5); }
+.custom-preset.preset-cyberpunk { background:linear-gradient(135deg, #ff00ff, #00ffff); }
+.custom-preset.preset-matrix { background:linear-gradient(135deg, #00ff41, #0d0208); }
+.custom-preset.preset-sunset { background:linear-gradient(135deg, #ff6b6b, #ffd93d); }
+.custom-preset.preset-ocean { background:linear-gradient(135deg, #2193b0, #6dd5ed); }
+.custom-preset.preset-forest { background:linear-gradient(135deg, #134e5e, #71b280); }
+.custom-preset.preset-crimson { background:linear-gradient(135deg, #8b0000, #ff6347); }
+.custom-preset.preset-monochrome { background:linear-gradient(135deg, #1a1a1a, #808080); }
+.custom-preset.preset-rose { background:linear-gradient(135deg, #f093fb, #f5576c); }
+.custom-preset.preset-lime { background:linear-gradient(135deg, #a8e063, #56ab2f); }
+.slider-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+.slider-row label { font-size:0.75rem; min-width:90px; color:var(--text-primary); }
+.slider-row input[type="range"] { flex:1; accent-color:var(--accent); }
+.slider-row .slider-value { font-family:var(--font-family-mono); font-size:0.7rem; min-width:48px; text-align:right; color:var(--text-secondary); }
+.font-options { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.font-option {
+    padding:10px 8px; border-radius:14px;
+    background:rgba(255,255,255,0.5);
+    border:2px solid transparent; cursor:pointer;
+    text-align:center; transition:all 0.2s; overflow:hidden;
+}
+body.dark-theme .font-option { background:rgba(30,40,60,0.6); }
+.font-option.selected { border-color:var(--accent); background:rgba(255,255,255,0.8); }
+.font-option .font-preview { font-size:0.95rem; margin-bottom:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.font-option .font-name { font-size:0.62rem; color:var(--text-secondary); }
+
+/* АДМИН */
+.admin-panel {
+    margin-top:12px; padding:10px 12px;
+    background:rgba(0,0,0,0.04); border-radius:14px;
+    border:1px dashed rgba(0,0,0,0.15); font-size:0.7rem;
+}
+body.dark-theme .admin-panel { background:rgba(255,255,255,0.03); border-color:rgba(255,255,255,0.1); }
+.admin-panel summary { font-weight:700; cursor:pointer; }
+.admin-row { display:flex; gap:4px; margin-top:6px; flex-wrap:wrap; }
+.admin-row button {
+    padding:5px 10px; border-radius:14px;
+    border:1px solid rgba(0,0,0,0.15); background:white;
+    cursor:pointer; font-size:0.65rem; font-weight:700; color:#333;
+}
+.admin-row button.special {
+    background:linear-gradient(135deg, gold, orange);
+    border-color:darkgoldenrod; color:#3b2e0a;
+}
+.hint { font-size:0.7rem; color:var(--text-secondary); text-align:center; margin:8px 0; line-height:1.5; }
+.info-row {
+    display:flex; justify-content:space-between;
+    padding:8px 0; border-bottom:1px solid rgba(0,0,0,0.05);
+    font-size:0.85rem;
+}
+body.dark-theme .info-row { border-bottom-color:rgba(255,255,255,0.05); }
+.info-row:last-child { border-bottom:none; }
+.info-row .label { color:var(--text-secondary); }
+.info-row .value { font-weight:600; font-family:var(--font-family-mono); }
+
+/* ========== LUCKY OVERLAY ========== */
+.lucky-overlay {
+    position:fixed; inset:0; z-index:1000;
+    display:none; align-items:center; justify-content:center;
+    pointer-events:none; font-family:var(--font-family-mono);
+}
+.lucky-overlay.active { display:flex; pointer-events:auto; }
+.lucky-backdrop {
+    position:absolute; inset:0;
+    background:radial-gradient(circle at center, rgba(10,5,20,0.55) 0%, rgba(0,0,0,0.9) 80%);
+    opacity:0; transition:opacity 0.9s cubic-bezier(0.4,0,0.2,1);
+}
+.lucky-overlay.step-dark .lucky-backdrop { opacity:1; }
+.lucky-center {
+    position:relative; display:flex;
+    align-items:center; justify-content:center;
+    gap:20px; z-index:10;
+    width:100%; padding:0 16px; flex-wrap:nowrap;
+}
+.lucky-base {
+    font-size:3rem; font-weight:900; color:#ffffff;
+    letter-spacing:-2px; line-height:1; white-space:nowrap;
+    text-shadow:0 0 20px rgba(255,255,255,0.4);
+    opacity:0; transform:scale(0.6);
+    transition:opacity 0.9s cubic-bezier(0.4,0,0.2,1),
+                transform 0.9s cubic-bezier(0.34, 1.3, 0.64, 1),
+                color 0.6s, text-shadow 0.6s;
+}
+.lucky-base.show { opacity:1; transform:scale(1); }
+.lucky-base.h1 { color:#ffd966; text-shadow:0 0 15px #ffcc33, 0 0 30px #ff9500, 0 0 45px rgba(255,120,0,0.6); }
+.lucky-base.h2 { color:#ffa500; text-shadow:0 0 20px #ff8c00, 0 0 40px #ff4500, 0 0 60px rgba(255,69,0,0.8), 0 0 90px rgba(255,0,0,0.5); }
+.lucky-base.h3 { color:#ff4500; text-shadow:0 0 25px #ff4500, 0 0 50px #ff0000, 0 0 80px rgba(255,0,0,0.9), 0 0 120px rgba(255,60,0,0.6); }
+.lucky-base.h4 { color:#ff1744; text-shadow:0 0 30px #ff1744, 0 0 60px #ff0000, 0 0 100px rgba(255,0,0,1), 0 0 150px rgba(255,0,0,0.7); }
+.lucky-base.h5 { color:#c8a2ff; text-shadow:0 0 30px #c8a2ff, 0 0 60px #7c3aed, 0 0 100px rgba(124,58,237,1), 0 0 150px rgba(100,50,255,0.8); }
+.lucky-base.h6 { color:#00d4ff; text-shadow:0 0 35px #00d4ff, 0 0 70px #0080ff, 0 0 120px rgba(0,128,255,1), 0 0 180px rgba(0,200,255,0.9); }
+.lucky-base.burning { animation:heatPulse 0.4s ease-in-out infinite alternate; }
+@keyframes heatPulse { from { transform:scale(1); } to { transform:scale(1.04); } }
+.lucky-plus {
+    font-size:2rem; font-weight:900; color:#fff;
+    line-height:1; opacity:0; transform:scale(0);
+    text-shadow:0 0 20px rgba(255,255,255,0.8);
+}
+.lucky-plus.hammered { animation:plusHammer 0.22s cubic-bezier(0.6, 0, 0.8, 1) forwards; }
+@keyframes plusHammer {
+    0% { transform:scale(4); opacity:0; }
+    50% { transform:scale(0.7); opacity:1; }
+    75% { transform:scale(1.1); }
+    100% { transform:scale(1); opacity:1; }
+}
+.lucky-roulette {
+    position:relative; display:flex; flex-direction:column;
+    align-items:flex-start; justify-content:center;
+    height:120px; min-width:120px;
+    opacity:0; transition:opacity 0.15s ease;
+}
+.lucky-roulette.show { opacity:1; }
+.roulette-line {
+    font-family:var(--font-family-mono); font-weight:900;
+    font-size:1.4rem; letter-spacing:-1px; line-height:1.15;
+    color:#5a6378; opacity:0.4;
+    white-space:nowrap;
+    transition:color 0.3s, opacity 0.3s, font-size 0.3s;
+}
+.roulette-line.current {
+    font-size:2.4rem; color:#00ff41; opacity:1;
+    text-shadow:0 0 20px rgba(0,255,65,0.9), 0 0 40px rgba(0,255,65,0.5);
+}
+.lucky-roulette.mode-purple .roulette-line.current {
+    color:#c8a2ff;
+    text-shadow:0 0 20px rgba(200,162,255,0.9), 0 0 40px rgba(124,58,237,0.6);
+}
+.lucky-roulette.mode-gold .roulette-line.current {
+    color:#ffd700;
+    text-shadow:0 0 25px rgba(255,215,0,1), 0 0 50px rgba(255,140,0,0.7);
+}
+.bigwin-window {
+    position:absolute; left:50%; top:50%;
+    transform:translate(-50%, -50%) scale(0.4);
+    opacity:0; text-align:center; z-index:20;
+    transition:all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    pointer-events:none; width:90%; max-width:480px;
+}
+.bigwin-window.show { opacity:1; transform:translate(-50%, -50%) scale(1); }
+.bigwin-inner {
+    position:relative;
+    background:linear-gradient(135deg, rgba(15,10,25,0.95), rgba(30,15,50,0.95));
+    border-radius:24px; padding:30px 26px; overflow:hidden;
+}
+.bigwin-inner::before {
+    content:''; position:absolute; inset:-2px; border-radius:26px;
+    background:conic-gradient(from 0deg, #ffd700, #ff69b4, #c8a2ff, #00d4ff, #00ff41, #ffd700);
+    z-index:-1; animation:borderSpin 3s linear infinite;
+}
+@keyframes borderSpin { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }
+.bigwin-inner::after {
+    content:''; position:absolute; inset:0; border-radius:24px;
+    background:linear-gradient(135deg, rgba(15,10,25,0.98), rgba(30,15,50,0.98));
+    z-index:-1;
+}
+.bigwin-label {
+    font-size:0.75rem; font-weight:900; letter-spacing:8px;
+    color:#ffd700; text-shadow:0 0 20px rgba(255,215,0,0.9);
+    margin-bottom:14px; text-transform:uppercase;
+}
+.bigwin-amount {
+    font-family:var(--font-family-mono); font-size:2.6rem;
+    font-weight:900; color:#fff;
+    text-shadow:0 0 20px #ffd700, 0 0 40px #ff8c00, 0 0 80px #ff4500;
+    letter-spacing:-2px; line-height:1; word-break:break-all;
+}
+.bigwin-multiplier {
+    font-family:var(--font-family-mono); font-size:1.3rem;
+    font-weight:900; color:#ffd700; letter-spacing:2px;
+    margin-top:14px; text-shadow:0 0 20px rgba(255,215,0,0.9);
+}
+.bigwin-window.jackpot .bigwin-label {
+    color:#00ffff;
+    text-shadow:0 0 25px #00ffff, 0 0 50px #0080ff;
+    animation:jackpotGlow 0.5s ease-in-out infinite alternate;
+}
+@keyframes jackpotGlow {
+    from { text-shadow:0 0 25px #00ffff, 0 0 50px #0080ff; }
+    to { text-shadow:0 0 40px #00ffff, 0 0 80px #0080ff, 0 0 120px #c8a2ff; }
+}
+.bigwin-window.jackpot .bigwin-amount { font-size:2rem; }
+.gold-particles { position:absolute; left:50%; top:50%; width:0; height:0; pointer-events:none; z-index:19; }
+.gold-particle {
+    position:absolute; width:10px; height:10px;
+    background:radial-gradient(circle, #ffd700 0%, #ff8c00 50%, transparent 100%);
+    border-radius:50%; box-shadow:0 0 10px #ffd700;
+    animation:goldBurst 1.5s ease-out forwards;
+}
+@keyframes goldBurst {
+    0% { transform:translate(0,0) scale(1); opacity:1; }
+    100% { transform:translate(var(--dx), var(--dy)) scale(0); opacity:0; }
+}
+.rainbow-chrome {
+    position:fixed; inset:0; z-index:2000;
+    pointer-events:none; opacity:0; transition:opacity 0.5s ease;
+    mix-blend-mode:overlay;
+}
+.rainbow-chrome.active { opacity:0.6; }
+.rainbow-chrome::before {
+    content:''; position:absolute; inset:-50%;
+    background:conic-gradient(from 0deg, #ff0000, #ff8c00, #ffd700, #00ff41, #00d4ff, #4b0082, #ff00ff, #ff0000);
+    animation:rainbowRotate 1.8s linear infinite; filter:blur(50px);
+}
+@keyframes rainbowRotate { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }
+.screen-flash {
+    position:fixed; inset:0; background:#fff;
+    opacity:0; z-index:3000; pointer-events:none;
+}
+.screen-flash.flash { animation:screenFlash 0.4s ease-out; }
+@keyframes screenFlash { 0% { opacity:0.95; } 100% { opacity:0; } }
+.app-shake.shake-lite { animation:shakeLite 0.15s linear; }
+.app-shake.shake-hard { animation:shakeHard 0.35s linear; }
+@keyframes shakeLite {
+    0%,100% { transform:translate(0,0); }
+    25% { transform:translate(-4px, 3px); }
+    50% { transform:translate(4px, -3px); }
+    75% { transform:translate(-3px, -2px); }
+}
+@keyframes shakeHard {
+    0%,100% { transform:translate(0,0) rotate(0); }
+    10% { transform:translate(-10px, 6px) rotate(-0.6deg); }
+    20% { transform:translate(10px, -8px) rotate(0.6deg); }
+    30% { transform:translate(-8px, 5px) rotate(-0.4deg); }
+    40% { transform:translate(8px, -4px) rotate(0.4deg); }
+    50% { transform:translate(-6px, 6px) rotate(-0.3deg); }
+    60% { transform:translate(6px, -3px) rotate(0.3deg); }
+    70% { transform:translate(-4px, 2px) rotate(-0.2deg); }
+    80% { transform:translate(4px, -2px) rotate(0.2deg); }
+    90% { transform:translate(-2px, 1px) rotate(0); }
+}
+.lucky-skip-hint {
+    position:absolute; bottom:30px; left:50%; transform:translateX(-50%);
+    color:rgba(255,255,255,0.5); font-size:0.7rem; font-family:var(--font-family-mono);
+    text-transform:uppercase; letter-spacing:2px;
+    animation:hintPulse 1.5s ease-in-out infinite alternate;
+}
+@keyframes hintPulse { from { opacity:0.3; } to { opacity:0.7; } }
+
+@media (max-width: 480px) {
+    .score-value { font-size:2.1rem; }
+    .btn-primary { font-size:1.35rem; padding:16px; }
+    .header-logo { font-size:1.5rem; }
+    .header-wrapper.scrolled .header-logo { font-size:0.82rem; }
+    .profile-displayname { font-size:1.3rem; }
+    .lucky-base { font-size:2.4rem; }
+    .roulette-line.current { font-size:1.9rem; }
+}
+</style>
+</head>
+<body id="appBody">
+<div class="app-container app-shake" id="appShake">
+
+<div class="header-wrapper top" id="headerWrapper">
+    <div class="header-inner">
+        <div class="header-logo" id="headerLogo">SNN_Combat</div>
+        <div class="header-actions">
+            <button class="header-btn" id="btnSettings" title="Настройки">⚙️</button>
+            <button class="header-btn" id="btnWallet" title="Кошелёк">👛</button>
+            <button class="header-btn" id="btnProfile" title="Профиль">
+                <div class="header-avatar" id="headerAvatar">?</div>
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="content-area">
+    <div class="clicker-card" id="clickerCard">
+        <div class="version-signature">v1.0.0</div>
+
+        <div class="profile-bar" id="profileBar">
+            <div class="profile-bar-avatar" id="profileBarAvatar">?</div>
+            <div class="profile-bar-info">
+                <div class="profile-bar-name" id="profileBarName">#snnfan</div>
+                <div class="profile-bar-address" id="profileBarAddress">без .sbk</div>
+            </div>
+            <div class="profile-bar-level" id="profileBarLevel">Ур.1</div>
+        </div>
+
+        <div class="energy-section">
+            <div class="energy-bar-bg">
+                <div class="energy-bar-fill" id="energyFill" style="width:100%"></div>
+            </div>
+            <div class="energy-label">
+                <span>⚡ <span id="energyText">100/100</span></span>
+                <span>+<span id="energyRate">1.0</span>/с · -<span id="energyPerClick">1</span>⚡</span>
+            </div>
+            <div class="streak-label hidden" id="streakLabel">стрик: 0</div>
+        </div>
+
+        <div class="offline-banner" id="offlineBanner">
+            🌙 <span id="offlineTime"></span> · x<span id="offlineMult"></span> · +<span id="offlineEarnings"></span>
+        </div>
+
+        <div class="progress-section">
+            <div class="progress-label">
+                <span>Прогресс</span>
+                <span id="progressText">0 / 5K</span>
+            </div>
+            <div class="progress-bar-bg">
+                <div class="progress-bar-fill" id="progressFill" style="width:0%"></div>
+            </div>
+        </div>
+
+        <div class="score-panel">
+            <div class="currency-label">💎 SNN КОИНЫ</div>
+            <div class="score-value selectable-num" id="scoreDisplay">0</div>
+            <div class="per-click-info">
+                <span>⚡ <span id="clickPowerDisplay" class="selectable-num">1.0</span></span>
+                <span>🔥 <span id="comboDisplay" class="selectable-num">x1.00</span></span>
+            </div>
+        </div>
+
+        <button class="btn-primary" id="clickBtn">КЛИК</button>
+        <button class="btn-recharge" id="rechargeBtn" disabled>⚡ Заряд полный</button>
+
+        <div class="section-header" id="upgradesHeader">
+            <span>⚡ Улучшения</span>
+            <span class="arrow">▼</span>
+        </div>
+        <div class="upgrades-wrapper" id="upgradesWrapper">
+            <div class="upgrade-item">
+                <div class="upgrade-info">
+                    <div class="upgrade-name">🔧 Тактический модуль</div>
+                    <div class="upgrade-desc">+1 к силе клика</div>
+                </div>
+                <div class="upgrade-action">
+                    <span class="upgrade-cost selectable-num" id="upgrade1Cost">50</span>
+                    <button class="btn-upgrade" id="upgrade1Btn">Улучшить</button>
+                </div>
+            </div>
+
+            <div class="upgrade-item">
+                <div class="upgrade-info">
+                    <div class="upgrade-name">🔋 Батарейка</div>
+                    <div class="upgrade-desc">Ур.<span id="batteryLevel">1</span> · <span id="batteryMax">100</span>⚡ · +<span id="batteryRateVal">1.0</span>/с</div>
+                </div>
+                <div class="upgrade-action">
+                    <span class="upgrade-cost selectable-num" id="batteryUpgradeCost">—</span>
+                    <button class="btn-upgrade" id="batteryUpgradeBtn">Улучшить</button>
+                </div>
+            </div>
+
+            <div class="upgrade-item">
+                <div class="upgrade-info">
+                    <div class="upgrade-name">🌙 Офлайн-модуль</div>
+                    <div class="upgrade-desc">Ур.<span id="offlineLevel">0</span> · ×<span id="offlineMultVal">1.0</span> · <span id="offlineHoursVal">24</span>ч</div>
+                </div>
+                <div class="upgrade-action">
+                    <span class="upgrade-cost selectable-num" id="offlineUpgradeCost">—</span>
+                    <button class="btn-upgrade" id="offlineUpgradeBtn">Улучшить</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="section-header">🔄 Обменник</div>
+        <div class="exchanger-panel">
+            <div class="sbc-display">
+                <span>💎 SBC:</span>
+                <span class="sbc-value selectable-num" id="sbcDisplay">0</span>
+            </div>
+            <button class="exchange-btn" id="openExchangeBtn">Открыть обменник</button>
+        </div>
+
+        <button class="btn-upgrade" id="buyLimitUpgradeBtn" style="width:100%; margin-bottom:6px; padding:10px;">📈 Снять ограничения (500k) — 25 SBC</button>
+
+        <div class="admin-panel">
+            <details>
+                <summary>🛠 Админ-панель</summary>
+                <div class="admin-row">
+                    <button onclick="adminAddSNN(1000)">+1K</button>
+                    <button onclick="adminAddSNN(100000)">+100K</button>
+                    <button onclick="adminAddSNN(10000000)">+10M</button>
+                    <button onclick="adminAddSBC(10)">+10 SBC</button>
+                </div>
+                <div class="admin-row">
+                    <button onclick="adminSetStreak(1000)">Стрик 1K</button>
+                    <button onclick="adminSetStreak(5000)">Стрик 5K</button>
+                    <button onclick="adminSetStreak(10000)">Стрик 10K</button>
+                </div>
+                <div class="admin-row">
+                    <button class="special" onclick="adminLucky()">🎰 Лаки</button>
+                    <button class="special" onclick="adminJackpot()">💎 JACKPOT</button>
+                </div>
+                <div class="admin-row">
+                    <button onclick="adminGiveUsername('snndaya')">Дать snndaya.sbk</button>
+                    <button onclick="adminGiveUsername('test')">Дать test.sbk</button>
+                </div>
+            </details>
+        </div>
+    </div>
+</div>
+</div>
+
+<div class="overlay-backdrop" id="overlayBackdrop"></div>
+
+<div class="bottom-sheet" id="profileSheet"><div class="bottom-sheet-handle"></div><div id="profileSheetContent"></div></div>
+<div class="bottom-sheet" id="gameInfoSheet"><div class="bottom-sheet-handle"></div><div id="gameInfoContent"></div></div>
+<div class="bottom-sheet" id="addressSheet"><div class="bottom-sheet-handle"></div><div id="addressSheetContent"></div></div>
+<div class="bottom-sheet" id="customizeSheet"><div class="bottom-sheet-handle"></div><div id="customizeSheetContent"></div></div>
+<div class="bottom-sheet" id="profileStyleSheet"><div class="bottom-sheet-handle"></div><div id="profileStyleContent"></div></div>
+<div class="bottom-sheet" id="profileEditSheet"><div class="bottom-sheet-handle"></div><div id="profileEditContent"></div></div>
+<div class="bottom-sheet" id="exchangeSheet"><div class="bottom-sheet-handle"></div><div id="exchangeSheetContent"></div></div>
+<div class="bottom-sheet" id="walletSheet"><div class="bottom-sheet-handle"></div><div id="walletSheetContent"></div></div>
+<div class="bottom-sheet" id="sbkCardSheet"><div class="bottom-sheet-handle"></div><div id="sbkCardContent"></div></div>
+<div class="bottom-sheet" id="settingsSheet">
+    <div class="bottom-sheet-handle"></div>
+    <h3>⚙️ Настройки</h3>
+    <button class="btn-action btn-primary-action" onclick="openGameInfo()">ℹ️ Об игре</button>
+    <button class="btn-action btn-secondary-action" onclick="openAddressMenu()">🌐 Адрес .sbk</button>
+    <button class="btn-action btn-secondary-action" onclick="openCustomize()">🎨 Внешний вид игры</button>
+    <button class="btn-action btn-secondary-action" onclick="openWallet()">👛 Кошелёк</button>
+    <button class="btn-action btn-secondary-action" onclick="resetGame()" style="color:#e74c3c; margin-top:16px;">⟲ Сбросить прогресс</button>
+</div>
+
+<!-- LUCKY OVERLAY -->
+<div class="lucky-overlay" id="luckyOverlay">
+    <div class="lucky-backdrop"></div>
+    <div class="lucky-center">
+        <div class="lucky-base" id="luckyBase">0</div>
+        <div class="lucky-plus" id="luckyPlus">+</div>
+        <div class="lucky-roulette" id="luckyRoulette">
+            <div class="roulette-line next" id="rouletteNext">×100</div>
+            <div class="roulette-line current" id="rouletteCurrent">×100</div>
+            <div class="roulette-line prev" id="roulettePrev">×100</div>
+        </div>
+    </div>
+    <div class="bigwin-window" id="bigwinWindow">
+        <div class="bigwin-inner">
+            <div class="bigwin-label" id="bigwinLabel">BIG WIN</div>
+            <div class="bigwin-amount" id="bigwinAmount">+0</div>
+            <div class="bigwin-multiplier" id="bigwinMultiplier">×100</div>
+        </div>
+    </div>
+    <div class="gold-particles" id="goldParticles"></div>
+    <div class="lucky-skip-hint" id="skipHint">TAP TO SKIP</div>
+</div>
+<div class="rainbow-chrome" id="rainbowChrome"></div>
+<div class="screen-flash" id="screenFlash"></div>
+
+<script>
+(function(){
+"use strict";
+
+// ========== УРОВНИ ==========
+function getStars(n){
+    if(n<=0) return 0;
+    if(n<=16){ var t=[1,5000,12000,19000,27000,36000,46000,57000,68000,81000,94000,107000,120000,133000,146000,160000]; return t[n-1]; }
+    if(n<=80) return 160000+(n-16)*13125;
+    return Math.floor(1400000*Math.pow(1.4,n-81));
+}
+function calculateLevel(exp){ var l=1; while(getStars(l+1)<=exp) l++; return Math.min(l,999); }
+
+// ========== БАТАРЕЙКА ==========
+var BATTERY_CONFIG = [
+    { level:1, max:100, rate:1.0, cost:0, currency:'SNN' },
+    { level:2, max:200, rate:1.5, cost:1000, currency:'SNN' },
+    { level:3, max:400, rate:2.0, cost:8000, currency:'SNN' },
+    { level:4, max:700, rate:3.0, cost:40000, currency:'SNN' },
+    { level:5, max:1100, rate:4.5, cost:200000, currency:'SNN' },
+    { level:6, max:1700, rate:6.0, cost:1000000, currency:'SNN' },
+    { level:7, max:2600, rate:8.0, cost:5000000, currency:'SNN' },
+    { level:8, max:4000, rate:12.0, cost:10, currency:'SBC' },
+    { level:9, max:6200, rate:18.0, cost:50, currency:'SBC' },
+    { level:10, max:10000, rate:25.0, cost:200, currency:'SBC' }
+];
+function getBatteryConfig(l){ return BATTERY_CONFIG[l-1] || BATTERY_CONFIG[9]; }
+// ЗАРЯДКА РАЗ В 30 МИНУТ — rate = max / 1800
+function getBatteryRate(l){ return getBatteryConfig(l).max / 1800; }
+// Разряд = СИЛА КЛИКА (без множителя)
+function getEnergyCost(){ return Math.max(1, Math.floor(clickPower)); }
+// Стоимость зарядки остаётся низкой
+function getRechargeCost(){ var c=getBatteryConfig(batteryLevel); return Math.floor(c.max*0.1); }
+function getOfflineMultiplier(lvl){ if(lvl<20) return 0; return round1(0.2+Math.floor((lvl-20)/10)*0.2); }
+
+// ========== ОФЛАЙН-МОДУЛЬ ==========
+var OFFLINE_MODULE = {
+    // множитель от 1 до 10, время в часах
+    levels: [
+        { mult:1, hours:24, cost:0, currency:'SNN' },
+        { mult:1.5, hours:48, cost:10000, currency:'SNN' },
+        { mult:2, hours:72, cost:100000, currency:'SNN' },
+        { mult:3, hours:120, cost:1000000, currency:'SNN' },
+        { mult:4, hours:168, cost:10000000, currency:'SNN' },
+        { mult:5, hours:240, cost:100000000, currency:'SNN' },
+        { mult:6, hours:336, cost:1, currency:'SBC' },
+        { mult:7, hours:432, cost:5, currency:'SBC' },
+        { mult:8, hours:504, cost:25, currency:'SBC' },
+        { mult:9, hours:600, cost:100, currency:'SBC' },
+        { mult:10, hours:720, cost:500, currency:'SBC' }
+    ]
+};
+function getOfflineModule(level){ return OFFLINE_MODULE.levels[Math.min(level, 10)]; }
+
+// ========== ФОРМАТ ==========
+function formatNumber(n){
+    if(n>=1e9) return (n/1e9).toFixed(2).replace(/\.00$/,'')+'B';
+    if(n>=1e6) return (n/1e6).toFixed(2).replace(/\.00$/,'')+'M';
+    if(n>=1e3) return (n/1e3).toFixed(1).replace(/\.0$/,'')+'K';
+    if(n===0) return '0';
+    return n.toFixed(1);
+}
+function formatFull(n){ return Math.floor(n).toLocaleString('ru-RU').replace(/,/g, ' '); }
+function round1(n){ return Math.round(n*10)/10; }
+function round2(n){ return Math.round(n*100)/100; }
+
+// ========== .SBK ==========
+var SBK_PRICING = {
+    getPrice: function(len){
+        if(len<4||len>20) return null;
+        var p = {4:10000,5:7500,6:5000,7:2500,8:1200,9:600,10:250};
+        return p[len] || 50;
+    },
+    getRental: function(len){ var p=this.getPrice(len); return p?Math.max(1,Math.floor(p*0.2)):1; },
+    getRarity: function(len){
+        if(len===4) return { name:'LEGENDARY', badge:'rarity-badge-legendary', text:'rarity-text-legendary-gold', icon:'👑' };
+        if(len===5) return { name:'LEGENDARY', badge:'rarity-badge-legendary', text:'rarity-text-legendary-silver', icon:'🥈' };
+        if(len<=7) return { name:'EPIC', badge:'rarity-badge-epic', text:'rarity-text-epic', icon:'💠' };
+        if(len<=9) return { name:'RARE', badge:'rarity-badge-rare', text:'rarity-text-rare', icon:'🥇' };
+        if(len===10) return { name:'UNCOMMON', badge:'rarity-badge-uncommon', text:'rarity-text-uncommon', icon:'🥈' };
+        return { name:'COMMON', badge:'rarity-badge-common', text:'rarity-text-common', icon:'' };
+    },
+    isValid: function(name){
+        if(!name) return false;
+        if(name.length<4||name.length>20) return false;
+        if(!/^[a-z0-9]([a-z0-9_-]*[a-z0-9])?$/.test(name)) return false;
+        if(name.includes('--')||name.includes('__')) return false;
+        return true;
+    }
+};
+
+
+// ========== ТЕМЫ ==========
+var THEME_PRESETS = {
+    default:{ accent:'#6b4e9b', bg:'#eef2f6', bg2:'#d9e2ec', dark:false },
+    discord:{ accent:'#5865f2', bg:'#313338', bg2:'#1e1f22', dark:true },
+    apple:{ accent:'#0071e3', bg:'#f5f5f7', bg2:'#e0e0e5', dark:false },
+    cyberpunk:{ accent:'#ff00ff', bg:'#0d0221', bg2:'#1a0033', dark:true },
+    matrix:{ accent:'#00ff41', bg:'#0d0208', bg2:'#001100', dark:true },
+    sunset:{ accent:'#ff6b6b', bg:'#fff5e6', bg2:'#ffd6b3', dark:false },
+    ocean:{ accent:'#2193b0', bg:'#e6f4ff', bg2:'#b0d4f0', dark:false },
+    forest:{ accent:'#134e5e', bg:'#f0fff0', bg2:'#b8d9b8', dark:false },
+    crimson:{ accent:'#8b0000', bg:'#ffe6e6', bg2:'#ffb3b3', dark:false },
+    monochrome:{ accent:'#444444', bg:'#f0f0f0', bg2:'#c0c0c0', dark:false },
+    rose:{ accent:'#f093fb', bg:'#fff0f5', bg2:'#ffc0d9', dark:false },
+    lime:{ accent:'#56ab2f', bg:'#f0ffe6', bg2:'#c0ffa0', dark:false }
+};
+
+// ========== СОСТОЯНИЕ ==========
+var score=0, totalExperience=0, clickPower=1;
+var upgrade1Level=0, batteryLevel=1, offlineLevel=0;
+var sbc=0, currentLevel=1, maxUpgradeCost=100000;
+var limitUpgraded=false, walletId=null, walletToken=null;
+var darkTheme=false;
+var lastSaveTime=Date.now(), energy=100, rechargeCooldown=0;
+var totalClicks=0, totalEarned=0, totalExchanged=0, totalPlaytime=0, sessionStart=Date.now();
+var activatedPromos={};
+// СТРИК
+var streak=0, lastClickTime=0, streakDecayTimer=null, streakDecayInterval=null;
+// ЛАКИ
+var luckyCount=0, bigWinCount=0, maxMultiplier=0;
+// УМЕНЬШЕННЫЕ ШАНСЫ
+var baseChance=0.01, streakBonus=0.0001, forceSunday=false;
+var isLuckyActive=false;
+// ЛАКИ — управление таймерами для скипа
+var luckyTimers=[];
+var luckyStep=0;
+var luckyCurrentMultiplier=100;
+var luckyCurrentReward=0;
+var luckyCurrentIsJp=false;
+var luckyCurrentTier=1;
+// Магазин свёрнут?
+var upgradesCollapsed=false;
+
+function generateDefaultName(){ return '#snnfan' + Math.floor(1000 + Math.random()*9000); }
+var profile = {
+    displayName: generateDefaultName(),
+    username: null, usernameExpires: 0, desc: '', tags: [],
+    avatar: null, avatarColor: null, banner: null, bannerColor: null, nameStyle: 'default'
+};
+var gameCustom = {
+    theme:'default', accentColor:'#6b4e9b', fontFamily:'Inter',
+    borderRadius:32, blurStrength:24, shadowStrength:15
+};
+var terminalLog = [
+    { type:'system', text:'SNN Combat Terminal v1.0.0' },
+    { type:'info', text:'Введите ///КОД для промокода' },
+    { type:'info', text:'Или просто напишите текст' }
+];
+var BASE_COST1=50, MULT1=1.8, SBC_RATE=10000, RECHARGE_CD=300000;
+var WALLET_LINK='https://t.me/YOUR_BOT/YOUR_WALLET_APP'; // !!! ССЫЛКА НА КОШЕЛЁК (переход игра -> кошелёк)
+// !!! ВПИШИ АДРЕС СВОЕГО СЕРВЕРА (https, без слэша в конце)
+var API_BASE='https://YOUR-API-HOST', tg=window.Telegram&&window.Telegram.WebApp, serverOffset=0, online=false, srv=null, uid='', rouletteId=0, connected=false, xseqLocal=0;
+// Telegram показывает один popup за раз; при ошибке откатываемся на обычный alert
+function alert(m){ try{ if(tg&&tg.showAlert){ tg.showAlert(String(m)); return; } }catch(e){} window.alert(m); }
+var SAVE_KEY='snn_combat_save_v15', PROFILE_KEY='snn_profile_v3', CUSTOM_KEY='snn_custom_v2';
+
+function $(id){ return document.getElementById(id); }
+var els = {
+    appBody:$('appBody'), appShake:$('appShake'), headerWrapper:$('headerWrapper'), headerLogo:$('headerLogo'),
+    clickerCard:$('clickerCard'),
+    scoreDisplay:$('scoreDisplay'), clickPowerDisplay:$('clickPowerDisplay'),
+    comboDisplay:$('comboDisplay'), clickBtn:$('clickBtn'), rechargeBtn:$('rechargeBtn'),
+    energyFill:$('energyFill'), energyText:$('energyText'), energyRateEl:$('energyRate'),
+    energyPerClickEl:$('energyPerClick'), streakLabel:$('streakLabel'),
+    upgrade1Btn:$('upgrade1Btn'), batteryUpgradeBtn:$('batteryUpgradeBtn'), offlineUpgradeBtn:$('offlineUpgradeBtn'),
+    upgrade1CostSpan:$('upgrade1Cost'), batteryUpgradeCost:$('batteryUpgradeCost'), offlineUpgradeCost:$('offlineUpgradeCost'),
+    batteryLevelDisplay:$('batteryLevel'), batteryMaxDisplay:$('batteryMax'),
+    batteryRateDisplay:$('batteryRateVal'),
+    offlineLevelDisplay:$('offlineLevel'), offlineMultDisplay:$('offlineMultVal'), offlineHoursDisplay:$('offlineHoursVal'),
+    progressText:$('progressText'), progressFill:$('progressFill'),
+    sbcDisplay:$('sbcDisplay'), buyLimitUpgradeBtn:$('buyLimitUpgradeBtn'),
+    offlineBanner:$('offlineBanner'), offlineTime:$('offlineTime'),
+    offlineMult:$('offlineMult'), offlineEarnings:$('offlineEarnings'),
+    overlayBackdrop:$('overlayBackdrop'),
+    profileSheet:$('profileSheet'), profileSheetContent:$('profileSheetContent'),
+    gameInfoSheet:$('gameInfoSheet'), gameInfoContent:$('gameInfoContent'),
+    addressSheet:$('addressSheet'), addressSheetContent:$('addressSheetContent'),
+    customizeSheet:$('customizeSheet'), customizeSheetContent:$('customizeSheetContent'),
+    profileStyleSheet:$('profileStyleSheet'), profileStyleContent:$('profileStyleContent'),
+    profileEditSheet:$('profileEditSheet'), profileEditContent:$('profileEditContent'),
+    exchangeSheet:$('exchangeSheet'), exchangeSheetContent:$('exchangeSheetContent'),
+    walletSheet:$('walletSheet'), walletSheetContent:$('walletSheetContent'),
+    sbkCardSheet:$('sbkCardSheet'), sbkCardContent:$('sbkCardContent'),
+    settingsSheet:$('settingsSheet'),
+    profileBar:$('profileBar'), profileBarAvatar:$('profileBarAvatar'),
+    profileBarName:$('profileBarName'), profileBarAddress:$('profileBarAddress'),
+    profileBarLevel:$('profileBarLevel'), headerAvatar:$('headerAvatar'),
+    // Сворачивание
+    upgradesHeader:$('upgradesHeader'), upgradesWrapper:$('upgradesWrapper'),
+    // Lucky
+    luckyOverlay:$('luckyOverlay'), luckyBase:$('luckyBase'), luckyPlus:$('luckyPlus'),
+    luckyRoulette:$('luckyRoulette'), rouletteNext:$('rouletteNext'), rouletteCurrent:$('rouletteCurrent'),
+    roulettePrev:$('roulettePrev'), bigwinWindow:$('bigwinWindow'), bigwinLabel:$('bigwinLabel'),
+    bigwinAmount:$('bigwinAmount'), bigwinMultiplier:$('bigwinMultiplier'),
+    goldParticles:$('goldParticles'), rainbowChrome:$('rainbowChrome'), screenFlash:$('screenFlash'),
+    skipHint:$('skipHint')
+};
+
+// ========== ВРЕМЯ ==========
+async function api(path,method,body){
+    var r=await fetch(API_BASE+path,{method:method||'GET',headers:{'Content-Type':'application/json','X-Init-Data':tg?tg.initData:''},body:body?JSON.stringify(body):undefined,keepalive:true});
+    var d=await r.json().catch(function(){return {};});
+    if(!r.ok) throw new Error(d.error||('Ошибка '+r.status));
+    return d;
+}
+function getCurrentTime(){ return Date.now()+serverOffset; }
+
+function isSunday(){ if(forceSunday) return true; return new Date(getCurrentTime()).getDay()===0; }
+function vibrate(p){
+    var h=tg&&tg.HapticFeedback;
+    if(h){ try{ h.impactOccurred((Array.isArray(p)&&p.length>1)?'medium':'light'); }catch(e){} return; }
+    if(navigator.vibrate){ try{ navigator.vibrate(p); }catch(e){} }
+}
+
+// ========== СТРИК ==========
+// Множитель: 1 + стрик × 0.0009 (на 10000 = 10.00)
+function getStreakMultiplier(){
+    if(streak <= 0) return 1;
+    var mult = 1 + streak * 0.0009;
+    if(mult > 10) mult = 10;
+    return round2(mult);
+}
+function getHeatLevel(s){
+    if(s<100) return 0;
+    if(s<300) return 1;
+    if(s<800) return 2;
+    if(s<1500) return 3;
+    if(s<2500) return 4;
+    if(s<4000) return 5;
+    return 6;
+}
+function updateStreakUI(){
+    var el = els.streakLabel;
+    if(streak > 0){
+        el.textContent = 'стрик: ' + streak;
+        el.classList.remove('hidden');
+    } else {
+        el.classList.add('hidden');
+    }
+    els.comboDisplay.textContent = 'x' + getStreakMultiplier().toFixed(2);
+}
+function startStreakDecay(){
+    if(streakDecayTimer) clearTimeout(streakDecayTimer);
+    if(streakDecayInterval) clearInterval(streakDecayInterval);
+    function schedule(){
+        streakDecayTimer = setTimeout(function(){
+            var elapsed = Date.now() - lastClickTime;
+            if(elapsed >= 10000 && streak > 0 && !isLuckyActive){
+                streakDecayInterval = setInterval(function(){
+                    var el = Date.now() - lastClickTime;
+                    if(el < 10000 || isLuckyActive) return;
+                    streak = Math.max(0, streak - 10);
+                    updateStreakUI();
+                    if(streak === 0) clearInterval(streakDecayInterval);
+                }, 1000);
+            } else if(streak > 0){ schedule(); }
+        }, 10000);
+    }
+    schedule();
+}
+
+// ========== СОХРАНЕНИЕ ==========
+var saveTimer=null;
+function snapshot(){
+    return { score:score, totalExperience:totalExperience, totalEarned:totalEarned, totalClicks:totalClicks, totalLuckyClicks:totalLuckyClicks,
+        clickPower:clickPower, upgrade1Level:upgrade1Level, energy:energy, batteryLevel:batteryLevel, offlineLevel:offlineLevel,
+        currentLevel:currentLevel, limitUpgraded:limitUpgraded, maxUpgradeCost:maxUpgradeCost, sbc:sbc, totalExchanged:totalExchanged,
+        luckyCount:luckyCount, bigWinCount:bigWinCount, lastRechargeTime:lastRechargeTime, activatedPromos:activatedPromos,
+        terminalLog:terminalLog, totalPlaytime:totalPlaytime+Math.floor((Date.now()-sessionStart)/1000), lastSaveTime:getCurrentTime() };
+}
+function saveGame(){
+    if(saveTimer) return;
+    saveTimer=setTimeout(function(){ saveTimer=null; flush(); },1500);
+}
+function flush(force){
+    lastSaveTime=getCurrentTime();
+    try{ localStorage.setItem(SAVE_KEY, JSON.stringify(snapshot())); }catch(e){}
+    pushState(force===true||(force&&force.type));
+}
+var lastPush=0;
+function pushState(force){
+    if(!online) return Promise.resolve();
+    var n=Date.now(); if(!force&&n-lastPush<5000) return Promise.resolve();
+    lastPush=n;
+    return api('/api/state','PUT',{state:snapshot()}).then(function(r){ if(r&&r.stale&&r.xseq>xseqLocal){ score=r.score; xseqLocal=r.xseq; refreshUI(); } }).catch(function(){});
+}
+var profTimer=null;
+function pushProfile(){
+    if(!online) return;
+    clearTimeout(profTimer);
+    profTimer=setTimeout(function(){
+        var p=Object.assign({},profile); delete p.avatar; delete p.banner; delete p.username; delete p.usernameExpires;
+        api('/api/profile','PUT',{profile:p}).catch(function(){});
+    },800);
+}
+function saveProfile(){ try{ localStorage.setItem(PROFILE_KEY, JSON.stringify(profile)); }catch(e){ alert('Не хватает места для картинки'); } pushProfile(); }
+function saveCustom(){ try{ localStorage.setItem(CUSTOM_KEY, JSON.stringify(gameCustom)); }catch(e){} }
+
+function loadGame(){
+    var praw=localStorage.getItem(PROFILE_KEY)||localStorage.getItem('snn_profile_v3');
+    var craw=localStorage.getItem(CUSTOM_KEY);
+    var raw=localStorage.getItem(SAVE_KEY)||localStorage.getItem('snn_combat_save_v15');
+    if(srv&&srv.state){
+        var lo=0; try{ lo=JSON.parse(raw||'{}').lastSaveTime||0; }catch(e){}
+        if(!raw||(srv.state.lastSaveTime||0)>=lo) raw=JSON.stringify(srv.state);
+    }
+    if(praw){ try{ profile=Object.assign(profile, JSON.parse(praw)); }catch(e){} }
+    if(craw){ try{ gameCustom=Object.assign(gameCustom, JSON.parse(craw)); }catch(e){} }
+    if(!raw) return false;
+    try{
+        var d=JSON.parse(raw);
+        score=d.score||0; totalExperience=d.totalExperience||score;
+        upgrade1Level=d.upgrade1Level||0; batteryLevel=d.batteryLevel||1; offlineLevel=d.offlineLevel||0;
+        clickPower = 1 + upgrade1Level;
+        sbc=d.sbc||0; currentLevel=d.currentLevel||1;
+        maxUpgradeCost=d.maxUpgradeCost||100000;
+        limitUpgraded=d.limitUpgraded||false;
+        walletId=d.walletId||null; walletToken=d.walletToken||null;
+        darkTheme=d.darkTheme||false;
+        lastSaveTime=d.lastSaveTime||getCurrentTime();
+        energy=d.energy!==undefined?d.energy:getBatteryConfig(batteryLevel).max;
+        rechargeCooldown=d.rechargeCooldown||0;
+        totalClicks=d.totalClicks||0; totalEarned=d.totalEarned||0;
+        totalExchanged=d.totalExchanged||0; totalPlaytime=d.totalPlaytime||0;
+        activatedPromos=d.activatedPromos||{};
+        if(d.terminalLog) terminalLog = d.terminalLog;
+        luckyCount=d.luckyCount||0; bigWinCount=d.bigWinCount||0; maxMultiplier=d.maxMultiplier||0;
+        upgradesCollapsed=d.upgradesCollapsed||false;
+        return true;
+    }catch(e){ return false; }
+}
+
+// ========== ТЕМА ==========
+function lightenColor(hex, percent){
+    var num=parseInt(hex.replace('#',''),16),
+        amt=Math.round(2.55*percent),
+        R=(num>>16)+amt, G=(num>>8&0x00FF)+amt, B=(num&0x0000FF)+amt;
+    return '#'+(0x1000000+(R<255?R<1?0:R:255)*0x10000+(G<255?G<1?0:G:255)*0x100+(B<255?B<1?0:B:255)).toString(16).slice(1);
+}
+function applyTheme(){
+    var root = document.documentElement;
+    root.style.setProperty('--accent', gameCustom.accentColor);
+    root.style.setProperty('--accent-light', lightenColor(gameCustom.accentColor, 25));
+    root.style.setProperty('--radius-card', gameCustom.borderRadius+'px');
+    root.style.setProperty('--blur-strength', gameCustom.blurStrength+'px');
+    root.style.setProperty('--shadow-strength', (gameCustom.shadowStrength/100).toFixed(2));
+    var fontMap = {
+        'Inter':"'Inter', system-ui, sans-serif",
+        'JetBrains Mono':"'JetBrains Mono', monospace",
+        'Playfair Display':"'Playfair Display', serif",
+        'Caveat':"'Caveat', cursive"
+    };
+    root.style.setProperty('--font-family-main', fontMap[gameCustom.fontFamily]||fontMap['Inter']);
+    var t = THEME_PRESETS[gameCustom.theme];
+    if(t){
+        root.style.setProperty('--bg-primary', t.bg);
+        root.style.setProperty('--bg-secondary', t.bg2);
+        if(t.dark) document.body.classList.add('dark-theme');
+        else document.body.classList.remove('dark-theme');
+    }
+    darkTheme = document.body.classList.contains('dark-theme');
+}
+
+// ========== АВАТАР ==========
+function getInitials(name){ if(!name) return '?'; return name.replace(/[^a-zA-Zа-яА-Я0-9]/g,'').substring(0,2).toUpperCase() || '?'; }
+function renderAvatar(el){
+    if(profile.avatar){ el.style.backgroundImage='url('+profile.avatar+')'; el.textContent=''; }
+    else if(profile.avatarColor){ el.style.backgroundImage='none'; el.style.background=profile.avatarColor; el.textContent=getInitials(profile.displayName); }
+    else { el.style.backgroundImage=''; el.style.background=''; el.textContent=getInitials(profile.displayName); }
+}
+
+function updateProfileBar(){
+    renderAvatar(els.profileBarAvatar);
+    renderAvatar(els.headerAvatar);
+    els.profileBarName.textContent = profile.displayName || '#snnfan0000';
+    if(profile.username){
+        var rarity = SBK_PRICING.getRarity(profile.username.length);
+        els.profileBarAddress.textContent = profile.username + '.sbk';
+        els.profileBarAddress.className = 'profile-bar-address sbk ' + (rarity.text || '');
+    } else {
+        els.profileBarAddress.textContent = walletId ? (walletId.substring(0,14)+'...') : 'без .sbk';
+        els.profileBarAddress.className = 'profile-bar-address';
+    }
+    els.profileBarLevel.textContent = 'Ур.'+currentLevel;
+}
+
+// ========== REFRESH ==========
+function refreshUI(){
+    var newLevel = calculateLevel(totalExperience);
+    if(newLevel > currentLevel){ currentLevel = newLevel; triggerLevelFlash(); }
+
+    var cfg = getBatteryConfig(batteryLevel);
+    if(energy > cfg.max) energy = cfg.max;
+
+    els.scoreDisplay.textContent = formatNumber(score);
+    var len = els.scoreDisplay.textContent.length;
+    els.scoreDisplay.style.fontSize = len>8?'2.0rem':'2.6rem';
+
+    els.clickPowerDisplay.textContent = round1(clickPower).toFixed(1);
+    updateStreakUI();
+
+    // Разряд = СИЛА КЛИКА (без множителя)
+    var energyCost = getEnergyCost();
+    var energyPct = (energy/cfg.max)*100;
+    els.energyFill.style.width = energyPct+'%';
+    els.energyFill.classList.remove('low','medium');
+    if(energyPct < 20) els.energyFill.classList.add('low');
+    else if(energyPct < 50) els.energyFill.classList.add('medium');
+    els.energyText.textContent = Math.floor(energy)+'/'+cfg.max;
+    els.energyRateEl.textContent = getBatteryRate(batteryLevel).toFixed(2);
+    els.energyPerClickEl.textContent = energyCost;
+    els.clickBtn.classList.toggle('no-energy', energy < energyCost);
+
+    var now = getCurrentTime();
+    var cdRemain = Math.max(0, rechargeCooldown-now);
+    var rechargeCost = getRechargeCost();
+    if(cdRemain > 0 && energy < cfg.max){
+        els.rechargeBtn.disabled = true;
+        var sec = Math.ceil(cdRemain/1000);
+        els.rechargeBtn.textContent = '⚡ Кулдаун '+Math.floor(sec/60)+':'+(sec%60).toString().padStart(2,'0');
+    } else if(energy >= cfg.max){
+        els.rechargeBtn.disabled = true;
+        els.rechargeBtn.textContent = '⚡ Заряд полный';
+    } else {
+        els.rechargeBtn.disabled = false;
+        els.rechargeBtn.textContent = '⚡ Быстрая зарядка ('+formatNumber(rechargeCost)+' SNN)';
+    }
+
+    var nextCost = getStars(currentLevel+1), curCost = getStars(currentLevel);
+    var progressIn = totalExperience-curCost, range = nextCost-curCost;
+    var pct = range>0?Math.min((progressIn/range)*100,100):100;
+    els.progressFill.style.width = pct+'%';
+    els.progressText.textContent = formatNumber(totalExperience)+' / '+formatNumber(nextCost);
+
+    // Улучшение 1
+    var cost1 = getUpgrade1Cost();
+    els.upgrade1CostSpan.textContent = formatNumber(cost1);
+    var maxed1 = cost1 >= maxUpgradeCost;
+    els.upgrade1Btn.classList.toggle('disabled', score<cost1 || maxed1);
+    els.upgrade1Btn.textContent = maxed1 ? 'MAX' : 'Улучшить';
+
+    // Батарейка
+    var nextBat = getBatteryUpgradeCost();
+    els.batteryLevelDisplay.textContent = batteryLevel;
+    els.batteryMaxDisplay.textContent = cfg.max;
+    els.batteryRateDisplay.textContent = getBatteryRate(batteryLevel).toFixed(2);
+    if(nextBat){
+        els.batteryUpgradeCost.textContent = nextBat.cost+' '+nextBat.currency;
+        var canBuy = nextBat.currency==='SNN' ? score>=nextBat.cost : sbc>=nextBat.cost;
+        els.batteryUpgradeBtn.classList.toggle('disabled', !canBuy);
+        els.batteryUpgradeBtn.textContent = 'Улучшить';
+    } else {
+        els.batteryUpgradeCost.textContent = 'MAX';
+        els.batteryUpgradeBtn.classList.add('disabled');
+        els.batteryUpgradeBtn.textContent = 'MAX';
+    }
+
+    // Офлайн-модуль
+    var offMod = getOfflineModule(offlineLevel);
+    els.offlineLevelDisplay.textContent = offlineLevel;
+    els.offlineMultDisplay.textContent = offMod.mult.toFixed(1);
+    els.offlineHoursDisplay.textContent = offMod.hours;
+    if(offlineLevel < 10){
+        var nextOff = OFFLINE_MODULE.levels[offlineLevel+1];
+        els.offlineUpgradeCost.textContent = nextOff.cost+' '+nextOff.currency;
+        var canBuyOff = nextOff.currency==='SNN' ? score>=nextOff.cost : sbc>=nextOff.cost;
+        els.offlineUpgradeBtn.classList.toggle('disabled', !canBuyOff);
+        els.offlineUpgradeBtn.textContent = 'Улучшить';
+    } else {
+        els.offlineUpgradeCost.textContent = 'MAX';
+        els.offlineUpgradeBtn.classList.add('disabled');
+        els.offlineUpgradeBtn.textContent = 'MAX';
+    }
+
+    els.sbcDisplay.textContent = sbc;
+    els.buyLimitUpgradeBtn.classList.toggle('disabled', limitUpgraded || sbc<25);
+    els.buyLimitUpgradeBtn.textContent = limitUpgraded ? '📈 Лимит снят (500k)' : '📈 Снять ограничения (500k) — 25 SBC';
+
+    updateProfileBar();
+    saveGame();
+}
+
+function triggerLevelFlash(){
+    els.clickerCard.classList.add('level-flash');
+    setTimeout(function(){ els.clickerCard.classList.remove('level-flash'); },600);
+}
+function spawnFloatText(x,y,text){
+    var el=document.createElement('div'); el.className='float-text';
+    el.textContent='+'+text; el.style.left=x+'px'; el.style.top=y+'px';
+    els.clickerCard.appendChild(el);
+    setTimeout(function(){ el.remove(); },800);
+}
+
+function getUpgrade1Cost(){ return Math.min(Math.floor(BASE_COST1*Math.pow(MULT1,upgrade1Level)), maxUpgradeCost); }
+function getBatteryUpgradeCost(){ if(batteryLevel>=10) return null; return BATTERY_CONFIG[batteryLevel]; }
+
+
+
+// ========== КЛИК ==========
+function handleClick(e){
+    if(isLuckyActive) return;
+    var energyCost = getEnergyCost();
+    if(energy < energyCost) return;
+
+    var mult = getStreakMultiplier();
+    var reward = round1(clickPower * mult);
+
+    score = round1(score+reward);
+    totalExperience = round1(totalExperience+reward);
+    totalEarned = round1(totalEarned+reward);
+    totalClicks++;
+    energy = Math.max(0, energy-energyCost);
+
+    if(streak < 1000000) streak++;
+    lastClickTime = Date.now();
+
+    els.scoreDisplay.textContent = formatNumber(score);
+    els.scoreDisplay.classList.add('pop');
+    setTimeout(function(){ els.scoreDisplay.classList.remove('pop'); },150);
+
+    if(e && e.clientX){
+        var rect = els.clickerCard.getBoundingClientRect();
+        spawnFloatText(e.clientX-rect.left, e.clientY-rect.top, reward.toFixed(1));
+    }
+
+    vibrate(8);
+    refreshUI();
+    startStreakDecay();
+
+    if(Math.random()*100 < calculateLuckyChance()) triggerLuckyClick();
+}
+
+function rechargeBattery(){
+    var cfg = getBatteryConfig(batteryLevel);
+    var cost = getRechargeCost();
+    var now = getCurrentTime();
+    if(now<rechargeCooldown || energy>=cfg.max || score<cost) return;
+    score = round1(score-cost);
+    energy = cfg.max;
+    rechargeCooldown = now+RECHARGE_CD;
+    vibrate([30,20,30]);
+    refreshUI();
+}
+
+function buyUpgrade1(){
+    var cost = getUpgrade1Cost();
+    if(score<cost || cost>=maxUpgradeCost) return;
+    score = round1(score-cost);
+    upgrade1Level++;
+    clickPower = 1 + upgrade1Level;
+    vibrate(20);
+    refreshUI();
+}
+
+var upgradeBattery=once(async function(){
+    var next=getBatteryUpgradeCost(); if(!next) return;
+    if(next.currency==='SNN'){ if(score<next.cost) return; score=round1(score-next.cost); }
+    else if(!(await spendSBC(next.cost))) return;
+    batteryLevel++; energy=getBatteryConfig(batteryLevel).max; vibrate(30); refreshUI(); pushState(true);
+});
+
+var upgradeOffline=once(async function(){
+    var next=getOfflineUpgradeCost(); if(!next) return;
+    if(next.currency==='SNN'){ if(score<next.cost) return; score=round1(score-next.cost); }
+    else if(!(await spendSBC(next.cost))) return;
+    offlineLevel++; vibrate(30); refreshUI(); pushState(true);
+});
+
+var buyLimitUpgrade=once(async function(){
+    if(limitUpgraded) return;
+    if(!(await spendSBC(25))) return;
+    limitUpgraded=true; maxUpgradeCost=500000; vibrate(40); refreshUI(); pushState(true);
+});
+
+// ========== СВОРАЧИВАНИЕ МАГАЗИНА ==========
+function toggleUpgrades(){
+    upgradesCollapsed = !upgradesCollapsed;
+    if(upgradesCollapsed){
+        els.upgradesWrapper.classList.add('collapsed');
+        els.upgradesHeader.classList.add('collapsed');
+    } else {
+        els.upgradesWrapper.classList.remove('collapsed');
+        els.upgradesHeader.classList.remove('collapsed');
+    }
+    saveGame();
+}
+function applyUpgradesCollapsed(){
+    if(upgradesCollapsed){
+        els.upgradesWrapper.classList.add('collapsed');
+        els.upgradesHeader.classList.add('collapsed');
+    }
+}
+
+// ========== ЛАКИ-КЛИК ==========
+function calculateLuckyChance(){
+    var sp = Math.min(streak*streakBonus, 1.5);
+    var c = baseChance + sp;
+    if(isSunday()) c *= 2.5;
+    return Math.min(c, 2);
+}
+
+function rollMultiplier(){
+    var boost = Math.min(streak/10000, 1)*0.5;
+    var z1=70-boost*20, z2=22+boost*10, z3=7+boost*8, z4=1+boost*2;
+    var t=z1+z2+z3+z4;
+    z1=z1/t*100; z2=z2/t*100; z3=z3/t*100; z4=z4/t*100;
+    var r = Math.random()*100;
+    if(r<z1) return 100 + Math.floor(Math.random()*91)*10;
+    r-=z1; if(r<z2) return 1000 + (Math.floor(Math.random()*41)+1)*100;
+    r-=z2; if(r<z3) return 5000 + (Math.floor(Math.random()*4)+1)*1000;
+    return 10000;
+}
+
+function clearLuckyTimers(){
+    for(var i=0;i<luckyTimers.length;i++) clearTimeout(luckyTimers[i]);
+    luckyTimers = [];
+}
+function scheduleLucky(delay, fn){
+    var t = setTimeout(fn, delay);
+    luckyTimers.push(t);
+    return t;
+}
+
+function triggerLuckyClick(force){
+    if(isLuckyActive) return;
+    isLuckyActive = true;
+    luckyCount++;
+    luckyStep = 0;
+    luckyTimers = [];
+
+    var mult = force || rollMultiplier();
+    luckyCurrentMultiplier = mult;
+    var hl = getHeatLevel(streak);
+
+    // Сброс
+    els.luckyBase.className = 'lucky-base';
+    els.luckyBase.textContent = formatNumber(round1(clickPower * getStreakMultiplier()));
+    els.luckyBase.style.cssText = '';
+    els.luckyPlus.className = 'lucky-plus';
+    els.luckyRoulette.className = 'lucky-roulette';
+    els.rouletteCurrent.textContent = '×100';
+    els.rouletteNext.textContent = '×100';
+    els.roulettePrev.textContent = '×100';
+    els.bigwinWindow.className = 'bigwin-window';
+    els.skipHint.style.display = 'block';
+
+    // Шаг 0: старт
+    els.luckyOverlay.classList.add('active');
+    els.appShake.style.filter = 'blur(3px) brightness(0.55)';
+    vibrate([25,20,25]);
+
+    scheduleLucky(60, function(){ els.luckyOverlay.classList.add('step-dark'); });
+    scheduleLucky(900, function(){ els.luckyBase.classList.add('show'); vibrate(20); });
+    scheduleLucky(1700, function(){
+        if(hl>0){
+            els.luckyBase.classList.add('h'+hl);
+            els.luckyBase.classList.add('burning');
+            if(hl>=5) vibrate([60,20,60,20,80]);
+            else if(hl>=3) vibrate([40,15,40]);
+            else vibrate([20,10,20]);
+        }
+    });
+    scheduleLucky(2500, function(){
+        els.luckyPlus.classList.add('hammered');
+        els.appShake.classList.add('shake-hard');
+        vibrate([100,30,60,20,80]);
+        setTimeout(function(){ els.appShake.classList.remove('shake-hard'); }, 350);
+    });
+    scheduleLucky(2900, function(){
+        els.appShake.classList.add('shake-lite');
+        setTimeout(function(){ els.appShake.classList.remove('shake-lite'); }, 150);
+        vibrate([15,10,15]);
+    });
+    scheduleLucky(3200, function(){
+        els.luckyRoulette.classList.add('show');
+        runRoulette(mult);
+    });
+}
+
+// СКИП — при тапе
+function skipLucky(){
+    if(!isLuckyActive) return;
+    clearLuckyTimers();
+    luckyStep++;
+    vibrate(20);
+
+    // Ручное продвижение по шагам
+    if(luckyStep === 1){
+        // Пропуск затемнения
+        els.luckyOverlay.classList.add('step-dark');
+        els.luckyBase.classList.add('show');
+    } else if(luckyStep === 2){
+        // Пропуск нагрева — сразу к плюсу
+        var hl = getHeatLevel(streak);
+        if(hl>0){ els.luckyBase.classList.add('h'+hl); els.luckyBase.classList.add('burning'); }
+        els.luckyPlus.classList.add('hammered');
+        els.appShake.classList.add('shake-hard');
+        setTimeout(function(){ els.appShake.classList.remove('shake-hard'); }, 350);
+    } else if(luckyStep === 3){
+        // Пропуск плюса — сразу к рулетке
+        els.luckyRoulette.classList.add('show');
+        runRoulette(luckyCurrentMultiplier);
+    }
+    // Дальше скип ловит рулетка и результат
+}
+
+function runRoulette(final){
+    var fp = 1;
+    if(final>5000) fp = 3;
+    else if(final>1000) fp = 2;
+    var phase = 1, start = Date.now(), stopped = false, token = ++rouletteId;
+    function r(c,n,p){
+        els.rouletteCurrent.textContent = '×'+c;
+        els.rouletteNext.textContent = '×'+n;
+        els.roulettePrev.textContent = '×'+p;
+    }
+    function tick(){
+        if(stopped || token !== rouletteId) return;
+        var el = Date.now()-start;
+        if(phase===1){
+            var pr = Math.min(el/1800,1), e = 1-Math.pow(1-pr,4), iv = 20+e*220;
+            var v = 100 + Math.floor(Math.random()*91)*10;
+            r(v, 100 + Math.floor(Math.random()*91)*10, v-10);
+            if(el>=1800){
+                if(fp===1){ stopped=true; r(final,final,final); vibrate([50,30,80]); setTimeout(function(){ showResult(final,1); },250); return; }
+                else{
+                    r(1000,1000,990); vibrate([40,60,40]);
+                    setTimeout(function(){
+                        phase=2; start=Date.now();
+                        els.luckyRoulette.classList.add('mode-purple');
+                        vibrate([80,30,60,30,100]);
+                        tick();
+                    }, 300);
+                    return;
+                }
+            }
+            setTimeout(tick, iv);
+            return;
+        }
+        if(phase===2){
+            var pr2 = Math.min(el/1300,1), e2 = 1-Math.pow(1-pr2,3.5), iv2 = 15+e2*130;
+            var v2 = 1000 + Math.floor(Math.random()*41)*100;
+            r(v2, 1000 + Math.floor(Math.random()*41)*100, v2-100);
+            if(el>=1300){
+                if(fp===2){ stopped=true; r(final,final,final); vibrate([70,40,100]); setTimeout(function(){ showResult(final,2); },250); return; }
+                else{
+                    r(5000,5000,4900); vibrate([40,60,40]);
+                    setTimeout(function(){
+                        phase=3; start=Date.now();
+                        els.luckyRoulette.classList.remove('mode-purple');
+                        els.luckyRoulette.classList.add('mode-gold');
+                        vibrate([100,40,80,40,150]);
+                        tick();
+                    }, 300);
+                    return;
+                }
+            }
+            setTimeout(tick, iv2);
+            return;
+        }
+        if(phase===3){
+            var pr3 = Math.min(el/1100,1), e3 = 1-Math.pow(1-pr3,3), iv3 = 12+e3*100;
+            var v3 = 5000 + Math.floor(Math.random()*5)*1000;
+            r(v3, 5000 + Math.floor(Math.random()*5)*1000, v3-1000);
+            if(el>=1100){ stopped=true; r(10000,10000,10000); vibrate([120,50,100,50,200]); setTimeout(function(){ showResult(10000,3); },300); return; }
+            setTimeout(tick, iv3);
+            return;
+        }
+    }
+    tick();
+}
+
+function showResult(m,tier){
+    if(!isLuckyActive || luckyStep===99) return;
+    luckyStep = 99;
+    var base = clickPower * getStreakMultiplier();
+    var reward = round1(base * m);
+    score = round1(score+reward);
+    totalExperience = round1(totalExperience+reward);
+    totalEarned = round1(totalEarned+reward);
+    if(m > maxMultiplier) maxMultiplier = m;
+
+    luckyCurrentReward = reward;
+    luckyCurrentIsJp = m >= 10000;
+    luckyCurrentTier = tier;
+
+    var isBig = m>=1000;
+    if(isBig) showBigWin(m, reward, luckyCurrentIsJp);
+    else {
+        els.skipHint.style.display = 'none';
+        els.bigwinLabel.textContent = 'LUCKY';
+        els.bigwinLabel.style.color = '#c8a2ff';
+        els.bigwinAmount.textContent = '+' + formatFull(reward);
+        els.bigwinMultiplier.textContent = '×' + m;
+        els.bigwinWindow.classList.add('show');
+        vibrate([30,20,30]);
+        // Финальный шаг — тап закрывает
+        luckyStep = 99;
+        setTimeout(function(){
+            if(isLuckyActive && luckyStep === 99) endLucky();
+        }, 1400);
+    }
+}
+
+function showBigWin(m,reward,isJp){
+    bigWinCount++;
+    els.skipHint.style.display = 'none';
+    els.bigwinLabel.textContent = isJp ? '💎 JACKPOT' : 'BIG WIN';
+    els.bigwinAmount.textContent = '+' + formatFull(reward);
+    els.bigwinMultiplier.textContent = '×' + m;
+    els.bigwinWindow.classList.add('show');
+    if(isJp) els.bigwinWindow.classList.add('jackpot');
+
+    spawnGold(isJp ? 120 : 60);
+
+    if(isJp){
+        vibrate([100,50,100,50,200,50,100,50,200]);
+        els.screenFlash.classList.add('flash');
+        setTimeout(function(){ els.screenFlash.classList.remove('flash'); },450);
+    } else vibrate([60,30,60,30,100]);
+
+    setTimeout(function(){ els.rainbowChrome.classList.add('active'); },250);
+    setTimeout(function(){ els.rainbowChrome.classList.remove('active'); }, isJp?14000:8500);
+
+    luckyStep = 99;
+    setTimeout(function(){
+        if(isLuckyActive && luckyStep === 99) endLucky();
+    }, isJp?5000:3800);
+}
+
+function endLucky(){
+    clearLuckyTimers();
+    els.skipHint.style.display = 'none';
+    els.scoreDisplay.textContent = formatNumber(score);
+    els.bigwinWindow.classList.remove('show','jackpot');
+    setTimeout(function(){
+        els.luckyRoulette.className = 'lucky-roulette';
+        els.luckyPlus.className = 'lucky-plus';
+        els.luckyBase.className = 'lucky-base';
+        els.luckyBase.style.cssText = '';
+        els.rainbowChrome.classList.remove('active');
+        setTimeout(function(){
+            els.luckyOverlay.classList.remove('active','step-dark');
+            els.appShake.style.filter = '';
+            isLuckyActive = false;
+            luckyStep = 0;
+            refreshUI();
+        }, 400);
+    }, 300);
+}
+
+function spawnGold(count){
+    for(var i=0;i<count;i++){
+        var p = document.createElement('div');
+        p.className = 'gold-particle';
+        var angle = Math.random()*Math.PI*2;
+        var dist = 100 + Math.random()*350;
+        p.style.setProperty('--dx', Math.cos(angle)*dist+'px');
+        p.style.setProperty('--dy', Math.sin(angle)*dist+'px');
+        p.style.animationDuration = (0.8+Math.random()*1.3)+'s';
+        p.style.animationDelay = (Math.random()*0.4)+'s';
+        els.goldParticles.appendChild(p);
+        (function(el){ setTimeout(function(){ el.remove(); }, 2800); })(p);
+    }
+}
+
+// ========== SHEETS ==========
+function closeAllSheets(){
+    var sheets = document.querySelectorAll('.bottom-sheet');
+    for(var i=0;i<sheets.length;i++) sheets[i].classList.remove('active');
+    els.overlayBackdrop.classList.remove('active');
+}
+function openSheet(sheet){
+    closeAllSheets();
+    sheet.classList.add('active');
+    els.overlayBackdrop.classList.add('active');
+}
+function escapeHtml(t){ return String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// ========== .SBK КАРТОЧКА ==========
+function openSbkCard(){
+    var rarity, name, expires;
+    if(profile.username){
+        rarity = SBK_PRICING.getRarity(profile.username.length);
+        name = profile.username;
+        expires = profile.usernameExpires;
+    } else {
+        rarity = { name:'—', badge:'rarity-badge-common', text:'rarity-text-common', icon:'❓' };
+        name = null;
+        expires = 0;
+    }
+
+    var html = '<h3>🌐 .sbk Адрес</h3>';
+
+    if(name){
+        var daysLeft = Math.ceil((expires - getCurrentTime())/(1000*60*60*24));
+        // Карточка
+        html += '<div style="width:100%;aspect-ratio:1.6/1;border-radius:20px;padding:20px;position:relative;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 20px 40px -10px rgba(0,0,0,0.3);font-family:var(--font-family-mono);margin-bottom:16px;';
+        var gradients = {
+            'legendary-gold':'linear-gradient(135deg,#ffd700,#ff8c00)',
+            'legendary-silver':'linear-gradient(135deg,#e0e0e0,#a0a0a0)',
+            'epic':'linear-gradient(135deg,#c8a2ff,#7c3aed)',
+            'rare':'linear-gradient(135deg,#6dd5ed,#3b82f6)',
+            'uncommon':'linear-gradient(135deg,#a8e6cf,#56ab2f)',
+            'common':'linear-gradient(135deg,#f0f0f0,#c0c0c5)'
+        };
+        var key = 'common';
+        if(profile.username.length === 4) key = 'legendary-gold';
+        else if(profile.username.length === 5) key = 'legendary-silver';
+        else if(profile.username.length <= 7) key = 'epic';
+        else if(profile.username.length <= 9) key = 'rare';
+        else if(profile.username.length === 10) key = 'uncommon';
+        var textColor = (key === 'legendary-gold') ? '#2b1f00' : ((key === 'legendary-silver') ? '#1a1a1a' : (key === 'common' ? '#333' : '#fff'));
+        html += 'background:' + gradients[key] + ';color:' + textColor + '">';
+        html += '<div style="position:absolute;top:-50%;right:-30%;width:300px;height:300px;background:radial-gradient(circle,rgba(255,255,255,0.4) 0%,transparent 60%);border-radius:50%;"></div>';
+        html += '<div style="display:flex;align-items:center;gap:6px;font-size:0.75rem;font-weight:700;z-index:2;">💼 SNN Wallet</div>';
+        html += '<div style="text-align:center;z-index:2;"><div style="font-size:1.7rem;font-weight:800;letter-spacing:-1px;word-break:break-all;">@'+name+'</div></div>';
+        html += '<div style="display:flex;justify-content:space-between;font-size:0.6rem;letter-spacing:1px;text-transform:uppercase;opacity:0.85;z-index:2;gap:8px;">';
+        html += '<div><div>IDENTITY</div><div>'+rarity.icon+' '+rarity.name+'</div></div>';
+        html += '<div style="text-align:right;"><div>ONE OF ONE</div><div>'+name+'.sbk</div></div>';
+        html += '</div></div>';
+
+        // Информация
+        html += '<div style="background:rgba(255,255,255,0.4);border-radius:18px;padding:14px;margin-bottom:12px;">';
+        html += '<div class="info-row"><span class="label">Аренда до</span><span class="value">'+new Date(expires).toLocaleDateString()+'</span></div>';
+        html += '<div class="info-row"><span class="label">Осталось</span><span class="value" style="color:'+(daysLeft>30?'#10b981':(daysLeft>0?'#f39c12':'#e74c3c'))+'">'+(daysLeft>0?daysLeft+' дн.':'ИСТЁК')+'</span></div>';
+        html += '<div class="info-row"><span class="label">Цена покупки</span><span class="value">'+SBK_PRICING.getPrice(name.length)+' SBC</span></div>';
+        html += '<div class="info-row"><span class="label">Продление (6 мес)</span><span class="value">'+SBK_PRICING.getRental(name.length)+' SBC</span></div>';
+        html += '<div class="info-row"><span class="label">Редкость</span><span class="value">'+rarity.icon+' '+rarity.name+'</span></div>';
+        html += '</div>';
+
+        html += '<div style="background:rgba(107,78,155,0.08);border-radius:18px;padding:14px;margin-bottom:12px;font-size:0.78rem;line-height:1.6;">';
+        html += '<div style="font-weight:800;font-size:0.85rem;margin-bottom:8px;">🌐 Что такое .sbk?</div>';
+        html += '<div style="color:var(--text-secondary);">';
+        html += '<b>.sbk</b> — это уникальный адрес в экосистеме SNN. Как домен в интернете, только для крипто-мира.<br><br>';
+        html += '<b>Зачем нужен:</b><br>';
+        html += '• Красивый адрес вместо длинного ID кошелька<br>';
+        html += '• Друзья могут отправлять SBC на <span style="font-family:var(--font-family-mono);">'+name+'.sbk</span> вместо сложного ID<br>';
+        html += '• Чем короче имя — тем оно реже и ценнее<br><br>';
+        html += '<b>Как работает:</b><br>';
+        html += '• Регистрация через SNN Name Service<br>';
+        html += '• Аренда на 6 месяцев<br>';
+        html += '• Продление за SBC<br>';
+        html += '• Можно иметь несколько адресов';
+        html += '</div></div>';
+
+        html += '<button class="btn-action btn-primary-action" onclick="closeAllSheets(); openAddressMenu();">🌐 Управлять адресом</button>';
+    } else {
+        html += '<div style="background:rgba(255,255,255,0.4);border-radius:18px;padding:16px;margin-bottom:14px;text-align:center;">';
+        html += '<div style="font-size:2.5rem;margin-bottom:8px;opacity:0.5;">🌐</div>';
+        html += '<div style="font-family:var(--font-family-mono);font-size:0.9rem;color:var(--text-secondary);">У вас пока нет .sbk адреса</div>';
+        html += '</div>';
+        html += '<div style="background:rgba(107,78,155,0.08);border-radius:18px;padding:14px;margin-bottom:12px;font-size:0.78rem;line-height:1.6;">';
+        html += '<div style="font-weight:800;font-size:0.85rem;margin-bottom:8px;">🌐 Что такое .sbk?</div>';
+        html += '<div style="color:var(--text-secondary);">';
+        html += '<b>.sbk</b> — это уникальный адрес в экосистеме SNN. Как домен в интернете, только для крипто-мира.<br><br>';
+        html += '<b>Зачем нужен:</b><br>';
+        html += '• Красивый адрес вместо длинного ID кошелька<br>';
+        html += '• Друзья могут отправлять SBC на ваш .sbk<br>';
+        html += '• Чем короче имя — тем оно реже и ценнее<br><br>';
+        html += '<b>Как получить:</b><br>';
+        html += '• Открой Name Service<br>';
+        html += '• Введи желаемый адрес<br>';
+        html += '• Проверь доступность<br>';
+        html += '• Купи за SBC';
+        html += '</div></div>';
+        html += '<button class="btn-action btn-primary-action" onclick="closeAllSheets(); openAddressMenu();">🌐 Купить адрес</button>';
+    }
+
+    html += '<button class="btn-action btn-secondary-action" onclick="closeAllSheets()">Закрыть</button>';
+    els.sbkCardContent.innerHTML = html;
+    openSheet(els.sbkCardSheet);
+}
+
+// ========== ПРОФИЛЬ ==========
+function openProfile(view){
+    var P=(view&&view.displayName!==undefined)?view:profile, foreign=P!==profile, S=foreign?view.stats:{level:currentLevel,earned:totalEarned,clicks:totalClicks};
+    var html = '<div class="profile-view">';
+    var bannerStyle = '';
+    if(P.banner) bannerStyle = 'background-image:url('+P.banner+');';
+    else if(P.bannerColor) bannerStyle = 'background:'+P.bannerColor+';';
+    html += '<div class="profile-banner" style="'+bannerStyle+'"></div>';
+    html += '<div class="profile-banner-inner">';
+    var avatarStyle = '';
+    if(P.avatar) avatarStyle = 'background-image:url('+P.avatar+');';
+    else if(P.avatarColor) avatarStyle = 'background:'+P.avatarColor+';';
+    html += '<div class="profile-avatar-big" style="'+avatarStyle+'" '+(foreign?'':' onclick="editAvatar()"')+'>'+(P.avatar||P.avatarColor?'':getInitials(P.displayName))+'</div>';
+    html += '<div class="profile-text-block">';
+    var nameStyle = '';
+    if(P.nameStyle === 'medieval') nameStyle = "font-family:'Playfair Display',serif;";
+    if(P.nameStyle === 'caveat') nameStyle = "font-family:'Caveat',cursive;font-size:1.8rem;";
+    html += '<div class="profile-displayname" style="'+nameStyle+'">'+escapeHtml(P.displayName||'#snnfan0000')+'</div>';
+    if(P.username){
+        var rarity = SBK_PRICING.getRarity(P.username.length);
+        html += '<div class="profile-username '+rarity.text+'" '+(foreign?'':'onclick="openSbkCard()"')+'>'+P.username+'.sbk <span style="opacity:0.7;font-size:0.75em;">'+rarity.icon+' '+rarity.name+'</span></div>';
+    } else html += '<div class="profile-username none" onclick="openSbkCard()">без .sbk</div>';
+    if(P.desc) html += '<div class="profile-desc">'+escapeHtml(P.desc)+'</div>';
+    if(P.tags && P.tags.length){
+        html += '<div class="profile-tags">';
+        for(var i=0;i<P.tags.length;i++) html += '<span class="profile-tag">'+escapeHtml(P.tags[i])+'</span>';
+        html += '</div>';
+    }
+    html += '</div>';
+    html += '<div class="profile-stats">';
+    html += '<div class="profile-stat"><div class="profile-stat-value selectable-num">'+S.level+'</div><div class="profile-stat-label">Уровень</div></div>';
+    html += '<div class="profile-stat"><div class="profile-stat-value selectable-num">'+formatNumber(S.earned)+'</div><div class="profile-stat-label">Заработано</div></div>';
+    html += '<div class="profile-stat"><div class="profile-stat-value selectable-num">'+S.clicks+'</div><div class="profile-stat-label">Кликов</div></div>';
+    html += '</div>';
+    if(!foreign){
+    html += '<div class="profile-actions">';
+    html += '<button class="btn-action btn-primary-action" onclick="openProfileEdit()">✏️ Редактировать</button>';
+    html += '<button class="btn-action btn-secondary-action" onclick="openProfileStyle()">🎨 Оформить</button>';
+    html += '</div>';
+    }
+    html += '</div></div>';
+    els.profileSheetContent.innerHTML = html;
+    openSheet(els.profileSheet);
+}
+
+function openProfileEdit(){
+    var tagsStr = (profile.tags||[]).join(', ');
+    var html = '<h3>✏️ Редактировать профиль</h3>';
+    html += '<div class="edit-field"><label>Имя профиля</label><input type="text" id="editName" value="'+escapeHtml(profile.displayName||'')+'" maxlength="24" placeholder="#snnfan0000"></div>';
+    html += '<div class="edit-field"><label>Описание</label><textarea id="editDesc" rows="3" maxlength="200" placeholder="Расскажи о себе...">'+escapeHtml(profile.desc||'')+'</textarea></div>';
+    html += '<div class="edit-field"><label>Теги (через запятую, макс 3)</label><input type="text" id="editTags" value="'+escapeHtml(tagsStr)+'" placeholder="snn, fan, combat"></div>';
+    html += '<button class="btn-action btn-primary-action" onclick="saveProfileEdit()">💾 Сохранить</button>';
+    html += '<button class="btn-action btn-secondary-action" onclick="openProfile()">Отмена</button>';
+    els.profileEditContent.innerHTML = html;
+    openSheet(els.profileEditSheet);
+}
+function saveProfileEdit(){
+    profile.displayName = $('editName').value.trim() || '#snnfan0000';
+    profile.desc = $('editDesc').value.trim();
+    var tagsRaw = $('editTags').value.split(',');
+    profile.tags = [];
+    for(var i=0;i<tagsRaw.length && profile.tags.length<3;i++){ var t=tagsRaw[i].trim(); if(t) profile.tags.push(t); }
+    saveProfile(); updateProfileBar(); openProfile();
+}
+function editAvatar(){
+    var input = document.createElement('input'); input.type='file'; input.accept='image/*';
+    input.onchange = function(){
+        var file = input.files[0]; if(!file) return;
+        if(file.size > 2*1024*1024){ alert('Макс 2 МБ'); return; }
+        var reader = new FileReader();
+        reader.onload = function(e){ shrinkImg(e.target.result,256,function(u){ profile.avatar = u; profile.avatarColor = null; saveProfile(); updateProfileBar(); openProfile(); }); };
+        reader.readAsDataURL(file);
+    };
+    input.click();
+}
+
+var AVATAR_COLORS = ['#6b4e9b','#5865f2','#e74c3c','#f39c12','#2ecc71','#1abc9c','#3498db','#9b59b6','#e91e63','#ff6b6b','#ffd700','#00ff41','#ff00ff','#23272a','#808080','#ffffff'];
+var BANNER_COLORS = ['#6b4e9b','#5865f2','#e74c3c','#f39c12','#2ecc71','#1abc9c','#3498db','#9b59b6','#e91e63','#ff6b6b','#ffd700','#134e5e','#ff00ff','#23272a','#808080','#f093fb'];
+
+function openProfileStyle(){
+    var html = '<h3>🎨 Оформление профиля</h3>';
+    html += '<div class="custom-section"><div class="section-label">👤 Цвет аватара</div><div class="color-grid">';
+    for(var i=0;i<AVATAR_COLORS.length;i++){ var c=AVATAR_COLORS[i]; var sel=profile.avatarColor===c?' selected':''; html += '<div class="color-swatch'+sel+'" style="background:'+c+'" data-avatar-color="'+c+'"></div>'; }
+    html += '</div><button class="btn-action btn-secondary-action" onclick="editAvatar()">📷 Загрузить картинку</button>';
+    if(profile.avatar) html += '<button class="btn-action btn-secondary-action" onclick="clearAvatar()">🗑 Удалить</button>';
+    html += '</div>';
+    html += '<div class="custom-section"><div class="section-label">🖼 Цвет баннера</div><div class="color-grid">';
+    for(var j=0;j<BANNER_COLORS.length;j++){ var bc=BANNER_COLORS[j]; var bsel=profile.bannerColor===bc?' selected':''; html += '<div class="color-swatch'+bsel+'" style="background:'+bc+'" data-banner-color="'+bc+'"></div>'; }
+    html += '</div><button class="btn-action btn-secondary-action" onclick="editBanner()">📷 Загрузить картинку</button>';
+    if(profile.banner) html += '<button class="btn-action btn-secondary-action" onclick="clearBanner()">🗑 Удалить</button>';
+    html += '</div>';
+    html += '<div class="custom-section"><div class="section-label">✨ Стиль имени</div><div class="font-options">';
+    var nameStyles = [{id:'default',name:'Обычный'},{id:'medieval',name:'Medieval'},{id:'caveat',name:'Caveat'}];
+    for(var k=0;k<nameStyles.length;k++){
+        var ns=nameStyles[k]; var nsel=profile.nameStyle===ns.id?' selected':'';
+        var ps = ns.id==='medieval'?"font-family:'Playfair Display',serif;" : (ns.id==='caveat'?"font-family:'Caveat',cursive;":'');
+        html += '<div class="font-option'+nsel+'" data-name-style="'+ns.id+'"><div class="font-preview" style="'+ps+'">Имя</div><div class="font-name">'+ns.name+'</div></div>';
+    }
+    html += '</div></div>';
+    els.profileStyleContent.innerHTML = html;
+    openSheet(els.profileStyleSheet);
+    setTimeout(function(){
+        var av = document.querySelectorAll('[data-avatar-color]');
+        for(var i=0;i<av.length;i++) av[i].addEventListener('click', function(){ profile.avatarColor=this.dataset.avatarColor; profile.avatar=null; saveProfile(); updateProfileBar(); openProfileStyle(); });
+        var bn = document.querySelectorAll('[data-banner-color]');
+        for(var j=0;j<bn.length;j++) bn[j].addEventListener('click', function(){ profile.bannerColor=this.dataset.bannerColor; profile.banner=null; saveProfile(); openProfileStyle(); });
+        var ns = document.querySelectorAll('[data-name-style]');
+        for(var k=0;k<ns.length;k++) ns[k].addEventListener('click', function(){ profile.nameStyle=this.dataset.nameStyle; saveProfile(); openProfileStyle(); });
+    }, 50);
+}
+function clearAvatar(){ profile.avatar=null; saveProfile(); updateProfileBar(); openProfileStyle(); }
+function clearBanner(){ profile.banner=null; saveProfile(); openProfileStyle(); }
+function editBanner(){
+    var input = document.createElement('input'); input.type='file'; input.accept='image/*';
+    input.onchange = function(){
+        var file = input.files[0]; if(!file) return;
+        if(file.size > 3*1024*1024){ alert('Макс 3 МБ'); return; }
+        var reader = new FileReader();
+        reader.onload = function(e){ shrinkImg(e.target.result,800,function(u){ profile.banner = u; profile.bannerColor = null; saveProfile(); openProfileStyle(); }); };
+        reader.readAsDataURL(file);
+    };
+    input.click();
+}
+
+// ========== АДРЕС ==========
+function openAddressMenu(){
+    var html = '<h3>🌐 SNN Name Service</h3>';
+    if(profile.username){
+        var daysLeft = Math.ceil((profile.usernameExpires - getCurrentTime())/(1000*60*60*24));
+        var rarity = SBK_PRICING.getRarity(profile.username.length);
+        html += '<div style="background:rgba(255,255,255,0.4);border-radius:18px;padding:16px;margin-bottom:14px;text-align:center;">';
+        html += '<div style="font-size:0.7rem;color:var(--text-secondary);letter-spacing:1px;">ВАШ АДРЕС</div>';
+        html += '<div class="'+rarity.text+'" style="font-family:var(--font-family-mono);font-size:1.3rem;font-weight:800;margin-top:6px;">'+profile.username+'.sbk</div>';
+        html += '<div style="font-size:0.75rem;color:var(--text-secondary);margin-top:6px;">'+rarity.icon+' '+rarity.name+' · Осталось: '+(daysLeft>0?daysLeft+' дн.':'ИСТЕКЛА')+'</div>';
+        html += '</div>';
+        html += '<button class="btn-action btn-primary-action" onclick="renewAddress()">🔄 Продлить на 6 месяцев ('+SBK_PRICING.getRental(profile.username.length)+' SBC)</button>';
+        html += '<button class="btn-action btn-secondary-action" onclick="releaseAddress()" style="color:#e74c3c;">Отказаться от адреса</button>';
+    } else {
+        html += '<div style="background:rgba(255,255,255,0.4);border-radius:18px;padding:14px;margin-bottom:14px;text-align:center;">';
+        html += '<div style="font-size:0.7rem;color:var(--text-secondary);letter-spacing:1px;">ТЕКУЩИЙ АДРЕС</div>';
+        html += '<div style="font-family:var(--font-family-mono);font-size:0.85rem;margin-top:4px;">'+(walletId||'SNN-????-????-????')+'</div>';
+        html += '</div>';
+        html += '<div class="search-box"><input type="text" id="sbkSearch" placeholder="ваш адрес" maxlength="20" autocomplete="off" spellcheck="false" autocorrect="off"><div class="suffix">.sbk</div></div>';
+        html += '<div id="addressPreviewSlot"></div>';
+        html += '<button class="btn-action btn-primary-action" id="checkUsernameBtn">🔍 Проверить доступность</button>';
+        html += '<div class="hint">4-20 символов · a-z, 0-9, дефис<br>Аренда на 6 месяцев · чем короче, тем дороже</div>';
+    }
+    els.addressSheetContent.innerHTML = html;
+    openSheet(els.addressSheet);
+    if(!profile.username){
+        setTimeout(function(){
+            var inp = $('sbkSearch');
+            if(inp) inp.addEventListener('input', function(){ updateAddressPreview(this.value); });
+            var btn = $('checkUsernameBtn');
+            if(btn) btn.addEventListener('click', checkUsername);
+        }, 50);
+    }
+}
+
+function updateAddressPreview(name){
+    name = (name||'').toLowerCase().replace(/[^a-z0-9_-]/g,'');
+    var slot = document.getElementById('addressPreviewSlot');
+    if(!slot) return;
+    slot.innerHTML = '';
+    if(!name || name.length < 4) return;
+    var price = SBK_PRICING.getPrice(name.length);
+    if(!price) return;
+    var rarity = SBK_PRICING.getRarity(name.length);
+    var valid = SBK_PRICING.isValid(name);
+    var rental = SBK_PRICING.getRental(name.length);
+    var html = '<div style="background:rgba(255,255,255,0.4);border-radius:18px;padding:14px;margin:12px 0;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">';
+    html += '<span class="'+rarity.text+'" style="font-family:var(--font-family-mono);font-weight:800;">'+name+'.sbk</span>';
+    html += '<span class="rarity-badge '+rarity.badge+'">'+rarity.icon+' '+rarity.name+'</span>';
+    html += '</div>';
+    if(!valid) html += '<div style="color:#e74c3c;font-size:0.75rem;">❌ Недопустимое имя</div>';
+    else {
+        html += '<div class="info-row"><span class="label">Покупка:</span><span class="value selectable-num">'+price+' SBC</span></div>';
+        html += '<div class="info-row"><span class="label">Аренда (6 мес):</span><span class="value selectable-num">'+rental+' SBC</span></div>';
+    }
+    html += '</div>';
+    slot.innerHTML = html;
+}
+
+var checkUsername=once(async function(){
+    var inp=$('sbkSearch'); if(!inp) return;
+    var name=inp.value.toLowerCase().trim();
+    if(name.length<4){ alert('Минимум 4 символа'); return; }
+    if(!SBK_PRICING.isValid(name)){ alert('Недопустимое имя'); return; }
+    if(!online){ alert('Нужна связь с сервером'); return; }
+    var price=SBK_PRICING.getPrice(name.length), rarity=SBK_PRICING.getRarity(name.length), c;
+    try{ c=await api('/api/sbk/check?name='+encodeURIComponent(name)); }catch(e){ alert(e.message); return; }
+    if(!c.available){ alert('❌ "'+name+'.sbk" занят'); return; }
+    if(sbc<price){ alert('❌ Недостаточно SBC!\nНужно: '+price+'\nУ вас: '+sbc); return; }
+    if(!confirm('🎉 Адрес свободен!\n\n'+name+'.sbk\n'+rarity.icon+' '+rarity.name+'\nЦена: '+price+' SBC\n\nКупить?')) return;
+    try{ var r=await api('/api/sbk/buy','POST',{name:name}); sbc=r.sbc; profile.username=r.sbk.name; profile.usernameExpires=r.sbk.expires; saveProfile(); refreshUI(); openAddressMenu(); }
+    catch(e){ alert(e.message); }
+});
+var renewAddress=once(async function(){
+    if(!online||!profile.username){ alert('Нужна связь с сервером'); return; }
+    try{ var r=await api('/api/sbk/renew','POST',{name:profile.username}); sbc=r.sbc; profile.usernameExpires=r.sbk.expires; saveProfile(); refreshUI(); openAddressMenu(); }
+    catch(e){ alert(e.message); }
+});
+var releaseAddress=once(async function(){
+    if(!online||!profile.username) return;
+    if(!confirm('Освободить '+profile.username+'.sbk? Деньги не возвращаются.')) return;
+    try{ await api('/api/sbk/release','POST',{name:profile.username}); profile.username=null; profile.usernameExpires=0; saveProfile(); refreshUI(); openAddressMenu(); }
+    catch(e){ alert(e.message); }
+});
+
+// ========== ИГРА ИНФО ==========
+function openGameInfo(){
+    var sessionSec = Math.floor((Date.now()-sessionStart)/1000);
+    var sessionStr = Math.floor(sessionSec/3600)+'ч '+Math.floor((sessionSec%3600)/60)+'м';
+    var totalStr = Math.floor((totalPlaytime + sessionSec)/3600)+'ч '+Math.floor(((totalPlaytime+sessionSec)%3600)/60)+'м';
+    var html = '<h3>ℹ️ Об игре</h3>';
+    html += '<div style="background:rgba(255,255,255,0.3);border-radius:18px;padding:14px;margin-bottom:10px;">';
+    html += '<div style="font-weight:800;font-size:1.05rem;margin-bottom:6px;">🎮 SNN Combat</div>';
+    html += '<div style="font-size:0.75rem;color:var(--text-secondary);font-family:var(--font-family-mono);">Версия 1.0.0</div>';
+    html += '<div style="font-size:0.8rem;margin-top:8px;line-height:1.5;">Кликер в экосистеме SNN. Зарабатывай SNN, лови лаки-клики, обменивай на SBC и покупай юзернеймы .sbk.</div>';
+    html += '</div>';
+    html += '<div style="background:rgba(255,255,255,0.3);border-radius:18px;padding:14px;margin-bottom:10px;">';
+    html += '<div style="font-weight:800;font-size:0.95rem;margin-bottom:8px;">👥 Команда</div>';
+    html += '<div class="info-row"><span class="label">snndaya.sbk</span><span class="value">CEO · Game Design</span></div>';
+    html += '<div class="info-row"><span class="label">skrutchi.sbk</span><span class="value">Lead Dev</span></div>';
+    html += '</div>';
+    html += '<div style="background:rgba(255,255,255,0.3);border-radius:18px;padding:14px;margin-bottom:10px;">';
+    html += '<div style="font-weight:800;font-size:0.95rem;margin-bottom:8px;">📊 Статистика</div>';
+    html += '<div class="info-row"><span class="label">Уровень</span><span class="value selectable-num">'+currentLevel+'</span></div>';
+    html += '<div class="info-row"><span class="label">Заработано</span><span class="value selectable-num">'+formatNumber(totalEarned)+'</span></div>';
+    html += '<div class="info-row"><span class="label">Обменено на SBC</span><span class="value selectable-num">'+totalExchanged+'</span></div>';
+    html += '<div class="info-row"><span class="label">Кликов</span><span class="value selectable-num">'+totalClicks+'</span></div>';
+    html += '<div class="info-row"><span class="label">Лаки-кликов</span><span class="value selectable-num">'+luckyCount+'</span></div>';
+    html += '<div class="info-row"><span class="label">BIG WIN</span><span class="value selectable-num">'+bigWinCount+'</span></div>';
+    html += '<div class="info-row"><span class="label">Макс множитель</span><span class="value selectable-num">'+(maxMultiplier?'×'+maxMultiplier:'—')+'</span></div>';
+    html += '<div class="info-row"><span class="label">Сессия</span><span class="value">'+sessionStr+'</span></div>';
+    html += '<div class="info-row"><span class="label">Всего</span><span class="value">'+totalStr+'</span></div>';
+    html += '</div>';
+    html += '<div style="background:rgba(255,255,255,0.3);border-radius:18px;padding:14px;margin-bottom:10px;">';
+    html += '<div style="font-weight:800;font-size:0.95rem;margin-bottom:8px;">🔧 Состояние</div>';
+    html += '<div class="info-row"><span class="label">Игра</span><span class="value">🟢 Онлайн</span></div>';
+    html += '<div class="info-row"><span class="label">Кошелёк</span><span class="value">'+(walletId?'🟢 Подключён':'🔴 Не подключён')+'</span></div>';
+    html += '<div class="info-row"><span class="label">Name Service</span><span class="value">🟢 Активен</span></div>';
+    html += '</div>';
+    html += '<div style="font-weight:800;font-size:0.95rem;margin:14px 0 8px;">💻 Терминал</div>';
+    html += '<div class="terminal" id="terminalBox"><div class="terminal-log" id="terminalLog"></div><div class="terminal-input-row"><span class="terminal-prompt">></span><input type="text" class="terminal-input" id="terminalInput" placeholder="текст или ///код" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></div></div>';
+    html += '<div class="hint">Пиши что угодно · для промокода используй ///КОД</div>';
+    els.gameInfoContent.innerHTML = html;
+    renderTerminal();
+    openSheet(els.gameInfoSheet);
+    setTimeout(function(){
+        var inp = $('terminalInput');
+        if(inp) inp.addEventListener('keydown', function(e){
+            if(e.key === 'Enter' && !e.shiftKey){
+                e.preventDefault();
+                var val = this.value; this.value = '';
+                setTimeout(function(){ processTerminalInput(val); }, 0);
+            }
+        });
+    }, 50);
+}
+
+function renderTerminal(){
+    var log = $('terminalLog');
+    if(!log) return;
+    var html = '';
+    for(var i=0;i<terminalLog.length;i++){ var line=terminalLog[i]; html += '<div class="terminal-line '+line.type+'">'+escapeHtml(line.text)+'</div>'; }
+    log.innerHTML = html;
+    log.scrollTop = log.scrollHeight;
+}
+
+var processTerminalInput=once(async function(text){
+    text=(text||'').trim(); if(!text) return;
+    var log=function(t,x){ terminalLog.push({type:t,text:x}); };
+    if(text.indexOf('///')===0){
+        var code=text.substring(3).trim().toUpperCase();
+        log('user-text','> ///'+code);
+        if(!code) log('error','✗ Пустой промокод');
+        else if(!online) log('error','✗ Нет связи с сервером');
+        else try{
+            var r=await api('/api/promo','POST',{code:code});
+            if(r.type==='snn'){ score=round1(score+r.amount); totalExperience=round1(totalExperience+r.amount); totalEarned=round1(totalEarned+r.amount); }
+            else sbc=r.sbc;
+            log('success','✓ Промокод активирован: '+r.desc); refreshUI();
+        }catch(e){ log('error','✗ '+e.message); }
+    } else log('user-text','> '+text);
+    if(terminalLog.length>100) terminalLog=terminalLog.slice(-100);
+    renderTerminal(); saveGame();
+});
+
+// ========== КАСТОМ ==========
+function openCustomize(){
+    var html = '<h3>🎨 Внешний вид игры</h3>';
+    html += '<div class="custom-section"><div class="section-label">🎭 Пресет темы</div><div class="custom-grid">';
+    var themes = ['default','discord','apple','cyberpunk','matrix','sunset','ocean','forest','crimson','monochrome','rose','lime'];
+    for(var i=0;i<themes.length;i++){ var t=themes[i]; var sel=gameCustom.theme===t?' selected':''; html += '<div class="custom-preset preset-'+t+sel+'" data-theme="'+t+'"></div>'; }
+    html += '</div></div>';
+    html += '<div class="custom-section"><div class="section-label">🎨 Акцентный цвет</div>';
+    html += '<div style="display:flex;gap:8px;align-items:center;">';
+    html += '<input type="color" id="accentPicker" value="'+gameCustom.accentColor+'" style="width:50px;height:40px;border:none;border-radius:12px;cursor:pointer;background:transparent;">';
+    html += '<input type="text" id="accentText" value="'+gameCustom.accentColor+'" readonly style="flex:1;padding:10px 14px;border-radius:12px;border:1px solid rgba(0,0,0,0.1);background:rgba(255,255,255,0.7);font-family:var(--font-family-mono);font-size:0.85rem;outline:none;color:var(--text-primary);">';
+    html += '</div></div>';
+    html += '<div class="custom-section"><div class="section-label">🔤 Шрифт</div><div class="font-options">';
+    var fonts = [{id:'Inter',name:'Inter'},{id:'JetBrains Mono',name:'JetBrains'},{id:'Playfair Display',name:'Playfair'},{id:'Caveat',name:'Caveat'}];
+    for(var j=0;j<fonts.length;j++){ var f=fonts[j]; var fsel=gameCustom.fontFamily===f.id?' selected':''; html += '<div class="font-option'+fsel+'" data-font="'+f.id+'"><div class="font-preview">Aa</div><div class="font-name">'+f.name+'</div></div>'; }
+    html += '</div></div>';
+    html += '<div class="custom-section"><div class="section-label">⬜ Скругления</div><div class="slider-row"><label>Углы</label><input type="range" id="radiusSlider" min="0" max="40" value="'+gameCustom.borderRadius+'"><span class="slider-value" id="radiusVal">'+gameCustom.borderRadius+'px</span></div></div>';
+    html += '<div class="custom-section"><div class="section-label">💠 Стекло</div><div class="slider-row"><label>Размытие</label><input type="range" id="blurSlider" min="0" max="40" value="'+gameCustom.blurStrength+'"><span class="slider-value" id="blurVal">'+gameCustom.blurStrength+'px</span></div></div>';
+    html += '<div class="custom-section"><div class="section-label">🌑 Тени</div><div class="slider-row"><label>Сила</label><input type="range" id="shadowSlider" min="0" max="60" value="'+gameCustom.shadowStrength+'"><span class="slider-value" id="shadowVal">'+gameCustom.shadowStrength+'%</span></div></div>';
+    html += '<button class="btn-action btn-secondary-action" onclick="resetCustomization()" style="color:#e74c3c;">⟲ Сброс</button>';
+    els.customizeSheetContent.innerHTML = html;
+    openSheet(els.customizeSheet);
+    setTimeout(function(){
+        var presets = document.querySelectorAll('[data-theme]');
+        for(var i=0;i<presets.length;i++) presets[i].addEventListener('click', function(){ gameCustom.theme=this.dataset.theme; var theme=THEME_PRESETS[gameCustom.theme]; if(theme) gameCustom.accentColor=theme.accent; saveCustom(); applyTheme(); openCustomize(); });
+        var picker = $('accentPicker');
+        if(picker) picker.addEventListener('input', function(){ gameCustom.accentColor=this.value; $('accentText').value=this.value; saveCustom(); applyTheme(); });
+        var fontOpts = document.querySelectorAll('[data-font]');
+        for(var j=0;j<fontOpts.length;j++) fontOpts[j].addEventListener('click', function(){ gameCustom.fontFamily=this.dataset.font; saveCustom(); applyTheme(); openCustomize(); });
+        var rs = $('radiusSlider'); if(rs) rs.addEventListener('input', function(){ gameCustom.borderRadius=parseInt(this.value); $('radiusVal').textContent=this.value+'px'; saveCustom(); applyTheme(); });
+        var bs = $('blurSlider'); if(bs) bs.addEventListener('input', function(){ gameCustom.blurStrength=parseInt(this.value); $('blurVal').textContent=this.value+'px'; saveCustom(); applyTheme(); });
+        var ss = $('shadowSlider'); if(ss) ss.addEventListener('input', function(){ gameCustom.shadowStrength=parseInt(this.value); $('shadowVal').textContent=this.value+'%'; saveCustom(); applyTheme(); });
+    }, 50);
+}
+function resetCustomization(){
+    if(!confirm('Сбросить оформление игры?')) return;
+    gameCustom = { theme:'default', accentColor:'#6b4e9b', fontFamily:'Inter', borderRadius:32, blurStrength:24, shadowStrength:15 };
+    saveCustom(); applyTheme(); openCustomize();
+}
+
+// ========== ОБМЕННИК ==========
+function openExchange(){
+    var html = '<h3>🔄 Обменник SNN → SBC</h3>';
+    html += '<div style="text-align:center;font-size:0.75rem;color:var(--text-secondary);margin-bottom:12px;">Курс: 10 000 SNN = 1 SBC</div>';
+    html += '<div class="exchange-presets">';
+    html += '<div class="exchange-preset" data-preset="1"><span class="exchange-preset-left">1 SBC</span><span class="exchange-preset-right">10 000 SNN</span></div>';
+    html += '<div class="exchange-preset" data-preset="10"><span class="exchange-preset-left">10 SBC</span><span class="exchange-preset-right">100 000 SNN</span></div>';
+    html += '<div class="exchange-preset" data-preset="100"><span class="exchange-preset-left">100 SBC</span><span class="exchange-preset-right">1 000 000 SNN</span></div>';
+    html += '</div>';
+    html += '<div class="exchange-custom"><div class="input-with-label"><label>Сколько SNN обменять</label><input type="number" id="snnInput" min="0" placeholder="0"></div><div style="font-size:0.75rem;color:var(--text-secondary);text-align:center;margin-bottom:8px;">Получите: <b id="snnResult" style="color:var(--accent);">0 SBC</b></div></div>';
+    html += '<div class="exchange-custom"><div class="input-with-label"><label>Сколько SBC нужно</label><input type="number" id="sbcInput" min="0" placeholder="0"></div><div style="font-size:0.75rem;color:var(--text-secondary);text-align:center;margin-bottom:8px;">Потребуется: <b id="sbcResult" style="color:var(--accent);">0 SNN</b></div></div>';
+    html += '<button class="btn-action btn-primary-action" id="doExchangeBtn">💱 Обменять</button>';
+    els.exchangeSheetContent.innerHTML = html;
+    openSheet(els.exchangeSheet);
+    setTimeout(function(){
+        var presets = document.querySelectorAll('[data-preset]');
+        for(var i=0;i<presets.length;i++) presets[i].addEventListener('click', function(){ doExchange(parseInt(this.dataset.preset)); });
+        var snnInput = $('snnInput');
+        if(snnInput) snnInput.addEventListener('input', function(){ var snn=parseInt(this.value)||0; $('snnResult').textContent=Math.floor(snn/SBC_RATE)+' SBC'; $('sbcInput').value=''; $('sbcResult').textContent='0 SNN'; });
+        var sbcInput = $('sbcInput');
+        if(sbcInput) sbcInput.addEventListener('input', function(){ var s=parseInt(this.value)||0; $('sbcResult').textContent=(s*SBC_RATE).toLocaleString()+' SNN'; $('snnInput').value=''; $('snnResult').textContent='0 SBC'; });
+        var btn = $('doExchangeBtn');
+        if(btn) btn.addEventListener('click', function(){ var snnVal=parseInt($('snnInput').value)||0; var sbcVal=parseInt($('sbcInput').value)||0; if(snnVal>0) doExchangeBySNN(snnVal); else if(sbcVal>0) doExchange(sbcVal); });
+    }, 50);
+}
+var doExchange=once(async function(n){
+    n=Math.floor(Number(n)); if(!(n>0)) return;
+    if(!online){ alert('Нужна связь с сервером'); return; }
+    var need=n*SBC_RATE;
+    if(score<need){ alert('Недостаточно SNN\nНужно: '+need.toLocaleString()+'\nУ вас: '+Math.floor(score).toLocaleString()); return; }
+    try{
+        await pushState(true);
+        var r=await api('/api/exchange','POST',{amount:n});
+        score=round1(score-need); sbc=r.sbc; totalExchanged+=n; xseqLocal=r.xseq;
+        refreshUI(); closeAllSheets(); alert('✅ Обменяно на '+n+' SBC'); pushState(true);
+    }catch(e){ alert(e.message); }
+});
+function doExchangeBySNN(snnAmount){
+    var sbcAmount = Math.floor(snnAmount / SBC_RATE);
+    if(sbcAmount <= 0){ alert('Минимум '+SBC_RATE.toLocaleString()+' SNN'); return; }
+    doExchange(sbcAmount);
+}
+
+// ========== КОШЕЛЁК ==========
+function openWalletLink(){
+    var url = WALLET_LINK + (connected ? '' : '?startapp=link_game');
+    if(tg && /^https:\/\/t\.me\//.test(url)) tg.openTelegramLink(url); else alert('Ссылка на кошелёк не настроена');
+}
+function openWallet(){
+    var html='<h3>💸 Кошелёк SNN</h3>';
+    if(!online){ html+='<p style="text-align:center;margin:10px 0;">Нужна связь с сервером</p>'; }
+    else if(!connected){
+        html+='<p style="text-align:center;margin:10px 0;">Кошелёк не подключён. Подключите его, чтобы покупать улучшения за SBC, обменивать SNN и владеть адресами .sbk.</p>';
+        html+='<button class="btn-action btn-primary-action" onclick="openWalletLink()">🔗 Подключить кошелёк</button>';
+    } else {
+        html+='<p style="text-align:center;margin:8px 0;">Доступно: <b>'+sbc+' SBC</b></p>';
+        html+='<div class="edit-field"><label>Адрес получателя (.sbk)</label><input type="text" id="transferTo" placeholder="name" maxlength="20" autocomplete="off" autocapitalize="off" spellcheck="false"></div>';
+        html+='<div class="edit-field"><label>Сумма</label><input type="number" id="transferAmount" min="1" max="'+sbc+'" value="1"></div>';
+        html+='<button class="btn-action btn-primary-action" onclick="doTransferToWallet()">Отправить</button>';
+        html+='<button class="btn-action btn-secondary-action" onclick="openWalletLink()">💼 Открыть кошелёк</button>';
+    }
+    html+='<button class="btn-action btn-secondary-action" onclick="closeAllSheets()">Закрыть</button>';
+    els.walletSheetContent.innerHTML=html;
+    openSheet(els.walletSheet);
+}
+var doTransferToWallet=once(async function(){
+    var to=($('transferTo').value||'').toLowerCase().trim().replace(/\.sbk$/,''), amt=parseInt($('transferAmount').value)||0;
+    if(!online){ alert('Нужна связь с сервером'); return; }
+    if(!to||amt<=0||amt>sbc) return;
+    try{ var r=await api('/api/transfer','POST',{to:to,amount:amt}); sbc=r.sbc; refreshUI(); closeAllSheets(); alert('✅ Отправлено '+amt+' SBC → '+to+'.sbk'); }
+    catch(e){ alert(e.message); }
+});
+function linkWalletAction(){}
+function openSettings(){ openSheet(els.settingsSheet); }
+
+// ========== ХЕДЕР ==========
+var scrollRaf = null;
+function updateHeaderOnScroll(){
+    if(scrollRaf) return;
+    scrollRaf = requestAnimationFrame(function(){
+        var scrollY = window.scrollY || document.documentElement.scrollTop;
+        var wasScrolled = els.headerWrapper.classList.contains('scrolled');
+        var shouldScroll = scrollY > 30;
+        if(shouldScroll !== wasScrolled){
+            if(shouldScroll) els.headerWrapper.classList.add('scrolled');
+            else els.headerWrapper.classList.remove('scrolled');
+        }
+        scrollRaf = null;
+    });
+}
+
+// ========== СЕРВЕР ==========
+function once(fn){ var b=false; return async function(){ if(b) return; b=true; try{ return await fn.apply(this,arguments); }finally{ b=false; } }; }
+async function spendSBC(n){
+    if(!online){ alert('Нужна связь с сервером'); return false; }
+    if(sbc<n) return false;
+    try{ var r=await api('/api/spend','POST',{amount:n}); sbc=r.sbc; return true; }catch(e){ alert(e.message); return false; }
+}
+async function refreshMe(){
+    if(!online) return;
+    try{
+        var r=await api('/api/me'); sbc=r.sbc; connected=!!r.connected; if(r.xseq>xseqLocal){ if(r.score!=null) score=r.score; xseqLocal=r.xseq; } serverOffset=r.now-Date.now();
+        if(r.snnCredit>0){ var c=await api('/api/claim','POST'); score=round1(score+c.amount); }
+        profile.username=r.sbk?r.sbk.name:null; profile.usernameExpires=r.sbk?r.sbk.expires:0; refreshUI();
+    }catch(e){}
+}
+async function viewSbk(name){
+    try{
+        var r=await api('/api/sbk/'+encodeURIComponent(name));
+        openProfile(Object.assign({},r.profile,{username:r.name,usernameExpires:r.expires,stats:r.stats}));
+    }catch(e){ alert('Адрес не найден или истёк'); }
+}
+function shrinkImg(src,max,cb){
+    var im=new Image();
+    im.onload=function(){
+        var k=Math.min(1,max/Math.max(im.width,im.height)), c=document.createElement('canvas');
+        c.width=Math.round(im.width*k); c.height=Math.round(im.height*k);
+        c.getContext('2d').drawImage(im,0,0,c.width,c.height); cb(c.toDataURL('image/webp',0.85));
+    };
+    im.onerror=function(){ alert('Не удалось открыть картинку'); };
+    im.src=src;
+}
+
+
+window.openProfile = openProfile;
+window.openWalletLink = openWalletLink;
+window.openProfileEdit = openProfileEdit;
+window.saveProfileEdit = saveProfileEdit;
+window.openProfileStyle = openProfileStyle;
+window.editAvatar = editAvatar;
+window.editBanner = editBanner;
+window.clearAvatar = clearAvatar;
+window.clearBanner = clearBanner;
+window.openGameInfo = openGameInfo;
+window.openAddressMenu = openAddressMenu;
+window.checkUsername = checkUsername;
+window.renewAddress = renewAddress;
+window.releaseAddress = releaseAddress;
+window.openSbkCard = openSbkCard;
+window.openCustomize = openCustomize;
+window.resetCustomization = resetCustomization;
+window.openExchange = openExchange;
+window.openWallet = openWallet;
+window.doTransferToWallet = doTransferToWallet;
+window.linkWalletAction = linkWalletAction;
+window.closeAllSheets = closeAllSheets;
+window.resetGame = function(){
+    if(confirm('Сбросить весь игровой прогресс?')){
+        score=0; totalExperience=0; clickPower=1;
+        upgrade1Level=0; batteryLevel=1; offlineLevel=0;
+        currentLevel=1; limitUpgraded=false; maxUpgradeCost=100000;
+        energy=getBatteryConfig(1).max; rechargeCooldown=0;
+        totalClicks=0; totalEarned=0; totalExchanged=0; totalPlaytime=0;
+        streak=0; luckyCount=0; bigWinCount=0; maxMultiplier=0;
+        sessionStart = Date.now();
+        activatedPromos = {};
+        terminalLog = [
+            { type:'system', text:'SNN Combat Terminal v1.0.0' },
+            { type:'info', text:'Прогресс сброшен' },
+            { type:'info', text:'Введите ///КОД для промокода' }
+        ];
+        refreshUI(); closeAllSheets();
+    }
+};
+
+// ========== INIT ==========
+async function init(){
+    var ap=document.querySelector('.admin-panel'); if(ap) ap.remove();
+    if(tg){ try{ tg.ready(); tg.expand(); if(tg.disableVerticalSwipes) tg.disableVerticalSwipes(); }catch(e){} }
+    try{
+        srv=await api('/api/auth','POST'); online=true; serverOffset=srv.now-Date.now(); uid=String(srv.user.id);
+        try{ localStorage.setItem('snn_uid',uid); }catch(e){}
+    }catch(e){
+        srv=null; online=false; uid=localStorage.getItem('snn_uid')||'';
+        alert('Нет связи с сервером. Офлайн-режим: SBC и .sbk недоступны.');
+    }
+    if(uid){ SAVE_KEY+='_'+uid; PROFILE_KEY+='_'+uid; }
+    loadGame();
+    if(srv){
+        if(srv.profile) Object.assign(profile,srv.profile); else pushProfile();
+        profile.username=srv.sbk?srv.sbk.name:null; profile.usernameExpires=srv.sbk?srv.sbk.expires:0;
+        sbc=srv.sbc; walletId=uid; walletToken=null; connected=!!srv.connected; xseqLocal=srv.xseq||0;
+        if(srv.snnCredit>0) refreshMe();
+    }
+
+    var now = getCurrentTime();
+    var elapsedSec = Math.floor((now-lastSaveTime)/1000);
+    var offMod = getOfflineModule(offlineLevel);
+
+    // Офлайн награда капает после 10 минут (600 сек)
+    if(elapsedSec > 600 && offlineLevel >= 0 && batteryLevel > 0){
+        var effElapsed = elapsedSec - 600;
+        var maxS = offMod.hours * 3600;
+        var effS = Math.min(effElapsed, maxS);
+        var baseRate = 0.2*batteryLevel;
+        // Множитель офлайн-модуля
+        var offlineCoins = Math.floor(effS * baseRate * offMod.mult);
+        if(offlineCoins > 0){
+            score = round1(score+offlineCoins);
+            totalExperience = round1(totalExperience+offlineCoins);
+            totalEarned = round1(totalEarned+offlineCoins);
+            var hrs = Math.floor(effS/3600);
+            var mins = Math.floor((effS%3600)/60);
+            els.offlineTime.textContent = hrs+'ч '+mins+'м';
+            els.offlineMult.textContent = offMod.mult.toFixed(1);
+            els.offlineEarnings.textContent = formatNumber(offlineCoins);
+            els.offlineBanner.style.display = 'block';
+            setTimeout(function(){ els.offlineBanner.style.display='none'; },10000);
+        }
+    }
+    if(elapsedSec > 0){
+        var cfg2 = getBatteryConfig(batteryLevel);
+        energy = Math.min(cfg2.max, energy + elapsedSec*getBatteryRate(batteryLevel));
+    }
+    sessionStart = Date.now();
+    lastSaveTime = now;
+
+
+    applyTheme();
+    applyUpgradesCollapsed();
+    refreshUI();
+    startStreakDecay();
+
+    els.clickBtn.addEventListener('click', handleClick);
+    els.rechargeBtn.addEventListener('click', rechargeBattery);
+    els.upgrade1Btn.addEventListener('click', buyUpgrade1);
+    els.batteryUpgradeBtn.addEventListener('click', upgradeBattery);
+    els.offlineUpgradeBtn.addEventListener('click', upgradeOffline);
+    els.buyLimitUpgradeBtn.addEventListener('click', buyLimitUpgrade);
+    // Сворачивание магазина
+    els.upgradesHeader.addEventListener('click', toggleUpgrades);
+
+    $('btnSettings').addEventListener('click', openSettings);
+    $('btnWallet').addEventListener('click', openWallet);
+    $('btnProfile').addEventListener('click', openProfile);
+    els.headerLogo.addEventListener('click', openGameInfo);
+    els.profileBar.addEventListener('click', openProfile);
+    // Тап на адрес — карточка .sbk
+    els.profileBarAddress.addEventListener('click', function(e){
+        e.stopPropagation();
+        openSbkCard();
+    });
+    els.overlayBackdrop.addEventListener('click', closeAllSheets);
+    $('openExchangeBtn').addEventListener('click', openExchange);
+
+    // ЛАКИ-СКИП — тап на overlay
+    els.luckyOverlay.addEventListener('click', function(e){
+        if(!isLuckyActive) return;
+        // Если рулетка уже активна или результат показан — не скипаем рулетку вручную
+        if(els.bigwinWindow.classList.contains('show')){
+            // Результат — тап закрывает
+            endLucky();
+            return;
+        }
+        if(els.luckyRoulette.classList.contains('show')){
+            // Рулетка активна — принудительно завершаем
+            clearLuckyTimers();
+            rouletteId++; // Мгновенная остановка рулетки
+            var fp = 1;
+            if(luckyCurrentMultiplier>5000) fp = 3;
+            else if(luckyCurrentMultiplier>1000) fp = 2;
+            els.rouletteCurrent.textContent = '×'+luckyCurrentMultiplier;
+            els.rouletteNext.textContent = '×'+luckyCurrentMultiplier;
+            els.roulettePrev.textContent = '×'+luckyCurrentMultiplier;
+            els.luckyRoulette.classList.remove('mode-purple','mode-gold');
+            if(fp === 2) els.luckyRoulette.classList.add('mode-purple');
+            if(fp === 3) els.luckyRoulette.classList.add('mode-gold');
+            vibrate([60,40,100]);
+            setTimeout(function(){ showResult(luckyCurrentMultiplier, fp); }, 150);
+            return;
+        }
+        // Иначе — пошаговый скип
+        skipLucky();
+    });
+
+    window.addEventListener('scroll', updateHeaderOnScroll, {passive:true});
+    updateHeaderOnScroll();
+
+    window.addEventListener('keydown', function(e){
+        if(e.code==='Space' && !e.repeat && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA'){
+            e.preventDefault();
+            if(isLuckyActive){
+                els.luckyOverlay.click();
+                return;
+            }
+            handleClick();
+            els.clickBtn.style.transform = 'scale(0.97)';
+            setTimeout(function(){ els.clickBtn.style.transform=''; },100);
+        }
+    });
+
+    document.addEventListener('visibilitychange', function(){ if(document.hidden) flush(true); else refreshMe(); });
+    window.addEventListener('pagehide', function(){ flush(true); });
+
+    // Игровой цикл — зарядка батарейки через 3 сек после последнего клика
+    setInterval(function(){
+        var cfg = getBatteryConfig(batteryLevel);
+        var timeSinceClick = Date.now() - lastClickTime;
+        // Зарядка только если прошло 3+ сек с последнего клика
+        if(energy < cfg.max && timeSinceClick >= 3000 && !isLuckyActive){
+            energy = Math.min(cfg.max, energy + getBatteryRate(batteryLevel));
+            refreshUI();
+        }
+        if(rechargeCooldown > 0 && getCurrentTime() >= rechargeCooldown){
+            rechargeCooldown = 0;
+            refreshUI();
+        }
+        saveGame();
+    }, 1000);
+
+    var sp = tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param;
+    if(sp && sp.indexOf('sbk_')===0) viewSbk(sp.slice(4));
+    console.log('✅ SNN Combat v1.0.0 загружен');
+}
+
+init();
+})();
+</script>
+</body>
+</html>
