@@ -1,9 +1,11 @@
+
 <!DOCTYPE html>
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>SNN Combat · ver.1.0.0</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@400;600;700;900&family=Caveat:wght@400;700&display=swap" rel="stylesheet">
@@ -1081,14 +1083,6 @@ var SBK_PRICING = {
     }
 };
 
-// ========== ПРОМОКОДЫ ==========
-var PROMO_CODES = {
-    'WELCOME':  { type:'snn', amount:10000, desc:'+10 000 SNN' },
-    'SNNFAN':   { type:'sbc', amount:1,     desc:'+1 SBC' },
-    'JESTER':   { type:'snn', amount:25000, desc:'+25 000 SNN' },
-    'ALPHA':    { type:'snn', amount:50000, desc:'+50 000 SNN' },
-    'MESSCREW': { type:'snn', amount:10000, desc:'+10 000 SNN' }
-};
 
 // ========== ТЕМЫ ==========
 var THEME_PRESETS = {
@@ -1148,7 +1142,11 @@ var terminalLog = [
     { type:'info', text:'Или просто напишите текст' }
 ];
 var BASE_COST1=50, MULT1=1.8, SBC_RATE=10000, RECHARGE_CD=300000;
-var WALLET_PATH='/storage/emulated/0/walllet.html';
+var WALLET_LINK='https://t.me/YOUR_BOT/YOUR_WALLET_APP'; // !!! ССЫЛКА НА КОШЕЛЁК (переход игра -> кошелёк)
+// !!! ВПИШИ АДРЕС СВОЕГО СЕРВЕРА (https, без слэша в конце)
+var API_BASE='https://YOUR-API-HOST', tg=window.Telegram&&window.Telegram.WebApp, serverOffset=0, online=false, srv=null, uid='', rouletteId=0, connected=false, xseqLocal=0;
+// Telegram показывает один popup за раз; при ошибке откатываемся на обычный alert
+function alert(m){ try{ if(tg&&tg.showAlert){ tg.showAlert(String(m)); return; } }catch(e){} window.alert(m); }
 var SAVE_KEY='snn_combat_save_v15', PROFILE_KEY='snn_profile_v3', CUSTOM_KEY='snn_custom_v2';
 
 function $(id){ return document.getElementById(id); }
@@ -1194,20 +1192,20 @@ var els = {
 };
 
 // ========== ВРЕМЯ ==========
-async function fetchServerTime(){
-    try{
-        var r = await fetch('https://www.googleapis.com/discovery/v1/apis',{method:'HEAD',cache:'no-store'});
-        var d = new Date(r.headers.get('date'));
-        if(d && !isNaN(d.getTime())){ var off=d.getTime()-Date.now(); if(!isNaN(off)) localStorage.setItem('snn_time_offset', String(off)); }
-    }catch(e){}
+async function api(path,method,body){
+    var r=await fetch(API_BASE+path,{method:method||'GET',headers:{'Content-Type':'application/json','X-Init-Data':tg?tg.initData:''},body:body?JSON.stringify(body):undefined,keepalive:true});
+    var d=await r.json().catch(function(){return {};});
+    if(!r.ok) throw new Error(d.error||('Ошибка '+r.status));
+    return d;
 }
-function getCurrentTime(){
-    var off = parseInt(localStorage.getItem('snn_time_offset')||'0');
-    if(isNaN(off)) off = 0;
-    return Date.now()+off;
+function getCurrentTime(){ return Date.now()+serverOffset; }
+
+function isSunday(){ if(forceSunday) return true; return new Date(getCurrentTime()).getDay()===0; }
+function vibrate(p){
+    var h=tg&&tg.HapticFeedback;
+    if(h){ try{ h.impactOccurred((Array.isArray(p)&&p.length>1)?'medium':'light'); }catch(e){} return; }
+    if(navigator.vibrate){ try{ navigator.vibrate(p); }catch(e){} }
 }
-function isSunday(){ if(forceSunday) return true; return new Date().getDay()===0; }
-function vibrate(p){ if(navigator.vibrate){ try{ navigator.vibrate(p); }catch(e){} } }
 
 // ========== СТРИК ==========
 // Множитель: 1 + стрик × 0.0009 (на 10000 = 10.00)
@@ -1258,36 +1256,49 @@ function startStreakDecay(){
 
 // ========== СОХРАНЕНИЕ ==========
 var saveTimer=null;
+function snapshot(){
+    return { score:score, totalExperience:totalExperience, totalEarned:totalEarned, totalClicks:totalClicks, totalLuckyClicks:totalLuckyClicks,
+        clickPower:clickPower, upgrade1Level:upgrade1Level, energy:energy, batteryLevel:batteryLevel, offlineLevel:offlineLevel,
+        currentLevel:currentLevel, limitUpgraded:limitUpgraded, maxUpgradeCost:maxUpgradeCost, sbc:sbc, totalExchanged:totalExchanged,
+        luckyCount:luckyCount, bigWinCount:bigWinCount, lastRechargeTime:lastRechargeTime, activatedPromos:activatedPromos,
+        terminalLog:terminalLog, totalPlaytime:totalPlaytime+Math.floor((Date.now()-sessionStart)/1000), lastSaveTime:getCurrentTime() };
+}
 function saveGame(){
     if(saveTimer) return;
-    saveTimer = setTimeout(function(){
-        lastSaveTime = getCurrentTime();
-        try{
-            localStorage.setItem(SAVE_KEY, JSON.stringify({
-                score:score, totalExperience:totalExperience,
-                clickPower:clickPower, upgrade1Level:upgrade1Level, batteryLevel:batteryLevel, offlineLevel:offlineLevel,
-                sbc:sbc, currentLevel:currentLevel, maxUpgradeCost:maxUpgradeCost,
-                limitUpgraded:limitUpgraded, walletId:walletId, walletToken:walletToken,
-                darkTheme:darkTheme, lastSaveTime:lastSaveTime,
-                energy:energy, rechargeCooldown:rechargeCooldown,
-                totalClicks:totalClicks, totalEarned:totalEarned, totalExchanged:totalExchanged,
-                totalPlaytime: totalPlaytime + Math.floor((Date.now()-sessionStart)/1000),
-                sessionStart: Date.now(),
-                activatedPromos:activatedPromos, terminalLog:terminalLog,
-                luckyCount:luckyCount, bigWinCount:bigWinCount, maxMultiplier:maxMultiplier,
-                upgradesCollapsed:upgradesCollapsed
-            }));
-        }catch(e){}
-        saveTimer = null;
-    }, 1500);
+    saveTimer=setTimeout(function(){ saveTimer=null; flush(); },1500);
 }
-function saveProfile(){ try{ localStorage.setItem(PROFILE_KEY, JSON.stringify(profile)); }catch(e){} }
+function flush(force){
+    lastSaveTime=getCurrentTime();
+    try{ localStorage.setItem(SAVE_KEY, JSON.stringify(snapshot())); }catch(e){}
+    pushState(force===true||(force&&force.type));
+}
+var lastPush=0;
+function pushState(force){
+    if(!online) return Promise.resolve();
+    var n=Date.now(); if(!force&&n-lastPush<5000) return Promise.resolve();
+    lastPush=n;
+    return api('/api/state','PUT',{state:snapshot()}).then(function(r){ if(r&&r.stale&&r.xseq>xseqLocal){ score=r.score; xseqLocal=r.xseq; refreshUI(); } }).catch(function(){});
+}
+var profTimer=null;
+function pushProfile(){
+    if(!online) return;
+    clearTimeout(profTimer);
+    profTimer=setTimeout(function(){
+        var p=Object.assign({},profile); delete p.avatar; delete p.banner; delete p.username; delete p.usernameExpires;
+        api('/api/profile','PUT',{profile:p}).catch(function(){});
+    },800);
+}
+function saveProfile(){ try{ localStorage.setItem(PROFILE_KEY, JSON.stringify(profile)); }catch(e){ alert('Не хватает места для картинки'); } pushProfile(); }
 function saveCustom(){ try{ localStorage.setItem(CUSTOM_KEY, JSON.stringify(gameCustom)); }catch(e){} }
 
 function loadGame(){
-    var praw=localStorage.getItem(PROFILE_KEY);
+    var praw=localStorage.getItem(PROFILE_KEY)||localStorage.getItem('snn_profile_v3');
     var craw=localStorage.getItem(CUSTOM_KEY);
-    var raw=localStorage.getItem(SAVE_KEY);
+    var raw=localStorage.getItem(SAVE_KEY)||localStorage.getItem('snn_combat_save_v15');
+    if(srv&&srv.state){
+        var lo=0; try{ lo=JSON.parse(raw||'{}').lastSaveTime||0; }catch(e){}
+        if(!raw||(srv.state.lastSaveTime||0)>=lo) raw=JSON.stringify(srv.state);
+    }
     if(praw){ try{ profile=Object.assign(profile, JSON.parse(praw)); }catch(e){} }
     if(craw){ try{ gameCustom=Object.assign(gameCustom, JSON.parse(craw)); }catch(e){} }
     if(!raw) return false;
@@ -1478,16 +1489,7 @@ function spawnFloatText(x,y,text){
 function getUpgrade1Cost(){ return Math.min(Math.floor(BASE_COST1*Math.pow(MULT1,upgrade1Level)), maxUpgradeCost); }
 function getBatteryUpgradeCost(){ if(batteryLevel>=10) return null; return BATTERY_CONFIG[batteryLevel]; }
 
-function syncSBCToWallet(amount){
-    try{
-        var raw=localStorage.getItem('snn_wallet_data'); if(!raw) return;
-        var w=JSON.parse(raw);
-        if(w.connections && w.connections['snncombat'] && w.connections['snncombat'].active){
-            w.sbc=(w.sbc||0)+amount; w.tokens=w.tokens||{}; w.tokens['SBC']=w.sbc;
-            localStorage.setItem('snn_wallet_data',JSON.stringify(w));
-        }
-    }catch(e){}
-}
+
 
 // ========== КЛИК ==========
 function handleClick(e){
@@ -1545,38 +1547,25 @@ function buyUpgrade1(){
     refreshUI();
 }
 
-function upgradeBattery(){
-    var next = getBatteryUpgradeCost(); if(!next) return;
-    if(next.currency==='SNN' && score<next.cost) return;
-    if(next.currency==='SBC' && sbc<next.cost) return;
-    if(next.currency==='SNN') score = round1(score-next.cost);
-    else sbc -= next.cost;
-    batteryLevel++;
-    energy = getBatteryConfig(batteryLevel).max;
-    vibrate(30);
-    refreshUI();
-}
+var upgradeBattery=once(async function(){
+    var next=getBatteryUpgradeCost(); if(!next) return;
+    if(next.currency==='SNN'){ if(score<next.cost) return; score=round1(score-next.cost); }
+    else if(!(await spendSBC(next.cost))) return;
+    batteryLevel++; energy=getBatteryConfig(batteryLevel).max; vibrate(30); refreshUI(); pushState(true);
+});
 
-function upgradeOffline(){
-    if(offlineLevel >= 10) return;
-    var next = OFFLINE_MODULE.levels[offlineLevel+1];
-    if(next.currency==='SNN' && score<next.cost) return;
-    if(next.currency==='SBC' && sbc<next.cost) return;
-    if(next.currency==='SNN') score = round1(score-next.cost);
-    else sbc -= next.cost;
-    offlineLevel++;
-    vibrate(30);
-    refreshUI();
-}
+var upgradeOffline=once(async function(){
+    var next=getOfflineUpgradeCost(); if(!next) return;
+    if(next.currency==='SNN'){ if(score<next.cost) return; score=round1(score-next.cost); }
+    else if(!(await spendSBC(next.cost))) return;
+    offlineLevel++; vibrate(30); refreshUI(); pushState(true);
+});
 
-function buyLimitUpgrade(){
-    if(limitUpgraded || sbc<25) return;
-    sbc -= 25;
-    limitUpgraded = true;
-    maxUpgradeCost = 500000;
-    syncSBCToWallet(-25);
-    refreshUI();
-}
+var buyLimitUpgrade=once(async function(){
+    if(limitUpgraded) return;
+    if(!(await spendSBC(25))) return;
+    limitUpgraded=true; maxUpgradeCost=500000; vibrate(40); refreshUI(); pushState(true);
+});
 
 // ========== СВОРАЧИВАНИЕ МАГАЗИНА ==========
 function toggleUpgrades(){
@@ -1714,14 +1703,14 @@ function runRoulette(final){
     var fp = 1;
     if(final>5000) fp = 3;
     else if(final>1000) fp = 2;
-    var phase = 1, start = Date.now(), stopped = false;
+    var phase = 1, start = Date.now(), stopped = false, token = ++rouletteId;
     function r(c,n,p){
         els.rouletteCurrent.textContent = '×'+c;
         els.rouletteNext.textContent = '×'+n;
         els.roulettePrev.textContent = '×'+p;
     }
     function tick(){
-        if(stopped) return;
+        if(stopped || token !== rouletteId) return;
         var el = Date.now()-start;
         if(phase===1){
             var pr = Math.min(el/1800,1), e = 1-Math.pow(1-pr,4), iv = 20+e*220;
@@ -1777,6 +1766,8 @@ function runRoulette(final){
 }
 
 function showResult(m,tier){
+    if(!isLuckyActive || luckyStep===99) return;
+    luckyStep = 99;
     var base = clickPower * getStreakMultiplier();
     var reward = round1(base * m);
     score = round1(score+reward);
@@ -1977,42 +1968,45 @@ function openSbkCard(){
 }
 
 // ========== ПРОФИЛЬ ==========
-function openProfile(){
+function openProfile(view){
+    var P=(view&&view.displayName!==undefined)?view:profile, foreign=P!==profile, S=foreign?view.stats:{level:currentLevel,earned:totalEarned,clicks:totalClicks};
     var html = '<div class="profile-view">';
     var bannerStyle = '';
-    if(profile.banner) bannerStyle = 'background-image:url('+profile.banner+');';
-    else if(profile.bannerColor) bannerStyle = 'background:'+profile.bannerColor+';';
+    if(P.banner) bannerStyle = 'background-image:url('+P.banner+');';
+    else if(P.bannerColor) bannerStyle = 'background:'+P.bannerColor+';';
     html += '<div class="profile-banner" style="'+bannerStyle+'"></div>';
     html += '<div class="profile-banner-inner">';
     var avatarStyle = '';
-    if(profile.avatar) avatarStyle = 'background-image:url('+profile.avatar+');';
-    else if(profile.avatarColor) avatarStyle = 'background:'+profile.avatarColor+';';
-    html += '<div class="profile-avatar-big" style="'+avatarStyle+'" onclick="editAvatar()">'+(profile.avatar||profile.avatarColor?'':getInitials(profile.displayName))+'</div>';
+    if(P.avatar) avatarStyle = 'background-image:url('+P.avatar+');';
+    else if(P.avatarColor) avatarStyle = 'background:'+P.avatarColor+';';
+    html += '<div class="profile-avatar-big" style="'+avatarStyle+'" '+(foreign?'':' onclick="editAvatar()"')+'>'+(P.avatar||P.avatarColor?'':getInitials(P.displayName))+'</div>';
     html += '<div class="profile-text-block">';
     var nameStyle = '';
-    if(profile.nameStyle === 'medieval') nameStyle = "font-family:'Playfair Display',serif;";
-    if(profile.nameStyle === 'caveat') nameStyle = "font-family:'Caveat',cursive;font-size:1.8rem;";
-    html += '<div class="profile-displayname" style="'+nameStyle+'">'+escapeHtml(profile.displayName||'#snnfan0000')+'</div>';
-    if(profile.username){
-        var rarity = SBK_PRICING.getRarity(profile.username.length);
-        html += '<div class="profile-username '+rarity.text+'" onclick="openSbkCard()">'+profile.username+'.sbk <span style="opacity:0.7;font-size:0.75em;">'+rarity.icon+' '+rarity.name+'</span></div>';
+    if(P.nameStyle === 'medieval') nameStyle = "font-family:'Playfair Display',serif;";
+    if(P.nameStyle === 'caveat') nameStyle = "font-family:'Caveat',cursive;font-size:1.8rem;";
+    html += '<div class="profile-displayname" style="'+nameStyle+'">'+escapeHtml(P.displayName||'#snnfan0000')+'</div>';
+    if(P.username){
+        var rarity = SBK_PRICING.getRarity(P.username.length);
+        html += '<div class="profile-username '+rarity.text+'" '+(foreign?'':'onclick="openSbkCard()"')+'>'+P.username+'.sbk <span style="opacity:0.7;font-size:0.75em;">'+rarity.icon+' '+rarity.name+'</span></div>';
     } else html += '<div class="profile-username none" onclick="openSbkCard()">без .sbk</div>';
-    if(profile.desc) html += '<div class="profile-desc">'+escapeHtml(profile.desc)+'</div>';
-    if(profile.tags && profile.tags.length){
+    if(P.desc) html += '<div class="profile-desc">'+escapeHtml(P.desc)+'</div>';
+    if(P.tags && P.tags.length){
         html += '<div class="profile-tags">';
-        for(var i=0;i<profile.tags.length;i++) html += '<span class="profile-tag">'+escapeHtml(profile.tags[i])+'</span>';
+        for(var i=0;i<P.tags.length;i++) html += '<span class="profile-tag">'+escapeHtml(P.tags[i])+'</span>';
         html += '</div>';
     }
     html += '</div>';
     html += '<div class="profile-stats">';
-    html += '<div class="profile-stat"><div class="profile-stat-value selectable-num">'+currentLevel+'</div><div class="profile-stat-label">Уровень</div></div>';
-    html += '<div class="profile-stat"><div class="profile-stat-value selectable-num">'+formatNumber(totalEarned)+'</div><div class="profile-stat-label">Заработано</div></div>';
-    html += '<div class="profile-stat"><div class="profile-stat-value selectable-num">'+totalClicks+'</div><div class="profile-stat-label">Кликов</div></div>';
+    html += '<div class="profile-stat"><div class="profile-stat-value selectable-num">'+S.level+'</div><div class="profile-stat-label">Уровень</div></div>';
+    html += '<div class="profile-stat"><div class="profile-stat-value selectable-num">'+formatNumber(S.earned)+'</div><div class="profile-stat-label">Заработано</div></div>';
+    html += '<div class="profile-stat"><div class="profile-stat-value selectable-num">'+S.clicks+'</div><div class="profile-stat-label">Кликов</div></div>';
     html += '</div>';
+    if(!foreign){
     html += '<div class="profile-actions">';
     html += '<button class="btn-action btn-primary-action" onclick="openProfileEdit()">✏️ Редактировать</button>';
     html += '<button class="btn-action btn-secondary-action" onclick="openProfileStyle()">🎨 Оформить</button>';
     html += '</div>';
+    }
     html += '</div></div>';
     els.profileSheetContent.innerHTML = html;
     openSheet(els.profileSheet);
@@ -2043,7 +2037,7 @@ function editAvatar(){
         var file = input.files[0]; if(!file) return;
         if(file.size > 2*1024*1024){ alert('Макс 2 МБ'); return; }
         var reader = new FileReader();
-        reader.onload = function(e){ profile.avatar = e.target.result; profile.avatarColor = null; saveProfile(); updateProfileBar(); openProfile(); };
+        reader.onload = function(e){ shrinkImg(e.target.result,256,function(u){ profile.avatar = u; profile.avatarColor = null; saveProfile(); updateProfileBar(); openProfile(); }); };
         reader.readAsDataURL(file);
     };
     input.click();
@@ -2090,540 +2084,4 @@ function editBanner(){
     input.onchange = function(){
         var file = input.files[0]; if(!file) return;
         if(file.size > 3*1024*1024){ alert('Макс 3 МБ'); return; }
-        var reader = new FileReader();
-        reader.onload = function(e){ profile.banner = e.target.result; profile.bannerColor = null; saveProfile(); openProfileStyle(); };
-        reader.readAsDataURL(file);
-    };
-    input.click();
-}
-
-// ========== АДРЕС ==========
-function openAddressMenu(){
-    var html = '<h3>🌐 SNN Name Service</h3>';
-    if(profile.username){
-        var daysLeft = Math.ceil((profile.usernameExpires - getCurrentTime())/(1000*60*60*24));
-        var rarity = SBK_PRICING.getRarity(profile.username.length);
-        html += '<div style="background:rgba(255,255,255,0.4);border-radius:18px;padding:16px;margin-bottom:14px;text-align:center;">';
-        html += '<div style="font-size:0.7rem;color:var(--text-secondary);letter-spacing:1px;">ВАШ АДРЕС</div>';
-        html += '<div class="'+rarity.text+'" style="font-family:var(--font-family-mono);font-size:1.3rem;font-weight:800;margin-top:6px;">'+profile.username+'.sbk</div>';
-        html += '<div style="font-size:0.75rem;color:var(--text-secondary);margin-top:6px;">'+rarity.icon+' '+rarity.name+' · Осталось: '+(daysLeft>0?daysLeft+' дн.':'ИСТЕКЛА')+'</div>';
-        html += '</div>';
-        html += '<button class="btn-action btn-primary-action" onclick="renewAddress()">🔄 Продлить на 6 месяцев ('+SBK_PRICING.getRental(profile.username.length)+' SBC)</button>';
-        html += '<button class="btn-action btn-secondary-action" onclick="releaseAddress()" style="color:#e74c3c;">Отказаться от адреса</button>';
-    } else {
-        html += '<div style="background:rgba(255,255,255,0.4);border-radius:18px;padding:14px;margin-bottom:14px;text-align:center;">';
-        html += '<div style="font-size:0.7rem;color:var(--text-secondary);letter-spacing:1px;">ТЕКУЩИЙ АДРЕС</div>';
-        html += '<div style="font-family:var(--font-family-mono);font-size:0.85rem;margin-top:4px;">'+(walletId||'SNN-????-????-????')+'</div>';
-        html += '</div>';
-        html += '<div class="search-box"><input type="text" id="sbkSearch" placeholder="ваш адрес" maxlength="20" autocomplete="off" spellcheck="false" autocorrect="off"><div class="suffix">.sbk</div></div>';
-        html += '<div id="addressPreviewSlot"></div>';
-        html += '<button class="btn-action btn-primary-action" id="checkUsernameBtn">🔍 Проверить доступность</button>';
-        html += '<div class="hint">4-20 символов · a-z, 0-9, дефис<br>Аренда на 6 месяцев · чем короче, тем дороже</div>';
-    }
-    els.addressSheetContent.innerHTML = html;
-    openSheet(els.addressSheet);
-    if(!profile.username){
-        setTimeout(function(){
-            var inp = $('sbkSearch');
-            if(inp) inp.addEventListener('input', function(){ updateAddressPreview(this.value); });
-            var btn = $('checkUsernameBtn');
-            if(btn) btn.addEventListener('click', checkUsername);
-        }, 50);
-    }
-}
-
-function updateAddressPreview(name){
-    name = (name||'').toLowerCase().replace(/[^a-z0-9_-]/g,'');
-    var slot = document.getElementById('addressPreviewSlot');
-    if(!slot) return;
-    slot.innerHTML = '';
-    if(!name || name.length < 4) return;
-    var price = SBK_PRICING.getPrice(name.length);
-    if(!price) return;
-    var rarity = SBK_PRICING.getRarity(name.length);
-    var valid = SBK_PRICING.isValid(name);
-    var rental = SBK_PRICING.getRental(name.length);
-    var html = '<div style="background:rgba(255,255,255,0.4);border-radius:18px;padding:14px;margin:12px 0;">';
-    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">';
-    html += '<span class="'+rarity.text+'" style="font-family:var(--font-family-mono);font-weight:800;">'+name+'.sbk</span>';
-    html += '<span class="rarity-badge '+rarity.badge+'">'+rarity.icon+' '+rarity.name+'</span>';
-    html += '</div>';
-    if(!valid) html += '<div style="color:#e74c3c;font-size:0.75rem;">❌ Недопустимое имя</div>';
-    else {
-        html += '<div class="info-row"><span class="label">Покупка:</span><span class="value selectable-num">'+price+' SBC</span></div>';
-        html += '<div class="info-row"><span class="label">Аренда (6 мес):</span><span class="value selectable-num">'+rental+' SBC</span></div>';
-    }
-    html += '</div>';
-    slot.innerHTML = html;
-}
-
-function checkUsername(){
-    var inp = $('sbkSearch'); if(!inp) return;
-    var name = inp.value.toLowerCase().trim();
-    if(!name || name.length < 4){ alert('Минимум 4 символа'); return; }
-    if(!SBK_PRICING.isValid(name)){ alert('Недопустимое имя'); return; }
-    var TAKEN = ['snn','admin','combat','wallet','bank','support','help','official','test','demo'];
-    if(TAKEN.indexOf(name) !== -1){ alert('❌ "'+name+'.sbk" занят'); return; }
-    var price = SBK_PRICING.getPrice(name.length);
-    var rarity = SBK_PRICING.getRarity(name.length);
-    if(sbc < price){ alert('❌ Недостаточно SBC!\nНужно: '+price+'\nУ вас: '+sbc); return; }
-    if(confirm('🎉 Адрес свободен!\n\n'+name+'.sbk\n'+rarity.icon+' '+rarity.name+'\nЦена: '+price+' SBC\n\nКупить?')){
-        sbc -= price;
-        profile.username = name;
-        profile.usernameExpires = getCurrentTime() + 180*24*60*60*1000;
-        saveProfile(); syncSBCToWallet(-price); refreshUI(); openAddressMenu();
-    }
-}
-function renewAddress(){
-    var price = SBK_PRICING.getRental(profile.username.length);
-    if(sbc < price){ alert('Недостаточно SBC: нужно '+price); return; }
-    sbc -= price;
-    profile.usernameExpires = Math.max(profile.usernameExpires, getCurrentTime()) + 180*24*60*60*1000;
-    saveProfile(); syncSBCToWallet(-price); refreshUI(); openAddressMenu();
-}
-function releaseAddress(){
-    if(!confirm('Отказаться от '+profile.username+'.sbk?')) return;
-    profile.username = null; profile.usernameExpires = 0; saveProfile(); updateProfileBar(); openAddressMenu();
-}
-
-// ========== ИГРА ИНФО ==========
-function openGameInfo(){
-    var sessionSec = Math.floor((Date.now()-sessionStart)/1000);
-    var sessionStr = Math.floor(sessionSec/3600)+'ч '+Math.floor((sessionSec%3600)/60)+'м';
-    var totalStr = Math.floor((totalPlaytime + sessionSec)/3600)+'ч '+Math.floor(((totalPlaytime+sessionSec)%3600)/60)+'м';
-    var html = '<h3>ℹ️ Об игре</h3>';
-    html += '<div style="background:rgba(255,255,255,0.3);border-radius:18px;padding:14px;margin-bottom:10px;">';
-    html += '<div style="font-weight:800;font-size:1.05rem;margin-bottom:6px;">🎮 SNN Combat</div>';
-    html += '<div style="font-size:0.75rem;color:var(--text-secondary);font-family:var(--font-family-mono);">Версия 1.0.0</div>';
-    html += '<div style="font-size:0.8rem;margin-top:8px;line-height:1.5;">Кликер в экосистеме SNN. Зарабатывай SNN, лови лаки-клики, обменивай на SBC и покупай юзернеймы .sbk.</div>';
-    html += '</div>';
-    html += '<div style="background:rgba(255,255,255,0.3);border-radius:18px;padding:14px;margin-bottom:10px;">';
-    html += '<div style="font-weight:800;font-size:0.95rem;margin-bottom:8px;">👥 Команда</div>';
-    html += '<div class="info-row"><span class="label">snndaya.sbk</span><span class="value">CEO · Game Design</span></div>';
-    html += '<div class="info-row"><span class="label">skrutchi.sbk</span><span class="value">Lead Dev</span></div>';
-    html += '</div>';
-    html += '<div style="background:rgba(255,255,255,0.3);border-radius:18px;padding:14px;margin-bottom:10px;">';
-    html += '<div style="font-weight:800;font-size:0.95rem;margin-bottom:8px;">📊 Статистика</div>';
-    html += '<div class="info-row"><span class="label">Уровень</span><span class="value selectable-num">'+currentLevel+'</span></div>';
-    html += '<div class="info-row"><span class="label">Заработано</span><span class="value selectable-num">'+formatNumber(totalEarned)+'</span></div>';
-    html += '<div class="info-row"><span class="label">Обменено на SBC</span><span class="value selectable-num">'+totalExchanged+'</span></div>';
-    html += '<div class="info-row"><span class="label">Кликов</span><span class="value selectable-num">'+totalClicks+'</span></div>';
-    html += '<div class="info-row"><span class="label">Лаки-кликов</span><span class="value selectable-num">'+luckyCount+'</span></div>';
-    html += '<div class="info-row"><span class="label">BIG WIN</span><span class="value selectable-num">'+bigWinCount+'</span></div>';
-    html += '<div class="info-row"><span class="label">Макс множитель</span><span class="value selectable-num">'+(maxMultiplier?'×'+maxMultiplier:'—')+'</span></div>';
-    html += '<div class="info-row"><span class="label">Сессия</span><span class="value">'+sessionStr+'</span></div>';
-    html += '<div class="info-row"><span class="label">Всего</span><span class="value">'+totalStr+'</span></div>';
-    html += '</div>';
-    html += '<div style="background:rgba(255,255,255,0.3);border-radius:18px;padding:14px;margin-bottom:10px;">';
-    html += '<div style="font-weight:800;font-size:0.95rem;margin-bottom:8px;">🔧 Состояние</div>';
-    html += '<div class="info-row"><span class="label">Игра</span><span class="value">🟢 Онлайн</span></div>';
-    html += '<div class="info-row"><span class="label">Кошелёк</span><span class="value">'+(walletId?'🟢 Подключён':'🔴 Не подключён')+'</span></div>';
-    html += '<div class="info-row"><span class="label">Name Service</span><span class="value">🟢 Активен</span></div>';
-    html += '</div>';
-    html += '<div style="font-weight:800;font-size:0.95rem;margin:14px 0 8px;">💻 Терминал</div>';
-    html += '<div class="terminal" id="terminalBox"><div class="terminal-log" id="terminalLog"></div><div class="terminal-input-row"><span class="terminal-prompt">></span><input type="text" class="terminal-input" id="terminalInput" placeholder="текст или ///код" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></div></div>';
-    html += '<div class="hint">Пиши что угодно · для промокода используй ///КОД</div>';
-    els.gameInfoContent.innerHTML = html;
-    renderTerminal();
-    openSheet(els.gameInfoSheet);
-    setTimeout(function(){
-        var inp = $('terminalInput');
-        if(inp) inp.addEventListener('keydown', function(e){
-            if(e.key === 'Enter' && !e.shiftKey){
-                e.preventDefault();
-                var val = this.value; this.value = '';
-                setTimeout(function(){ processTerminalInput(val); }, 0);
-            }
-        });
-    }, 50);
-}
-
-function renderTerminal(){
-    var log = $('terminalLog');
-    if(!log) return;
-    var html = '';
-    for(var i=0;i<terminalLog.length;i++){ var line=terminalLog[i]; html += '<div class="terminal-line '+line.type+'">'+escapeHtml(line.text)+'</div>'; }
-    log.innerHTML = html;
-    log.scrollTop = log.scrollHeight;
-}
-
-function processTerminalInput(text){
-    text = (text||'').trim();
-    if(!text) return;
-    if(text.indexOf('///') === 0){
-        var code = text.substring(3).trim().toUpperCase();
-        if(!code){ terminalLog.push({type:'user-text',text:'> ///'}); terminalLog.push({type:'error',text:'✗ Пустой промокод'}); renderTerminal(); saveGame(); return; }
-        if(PROMO_CODES[code]){
-            if(activatedPromos[code]){ terminalLog.push({type:'user-text',text:'> ///'+code}); terminalLog.push({type:'error',text:'✗ Уже использован'}); }
-            else{
-                var promo = PROMO_CODES[code];
-                if(promo.type==='snn'){ score=round1(score+promo.amount); totalExperience=round1(totalExperience+promo.amount); totalEarned=round1(totalEarned+promo.amount); }
-                else if(promo.type==='sbc'){ sbc+=promo.amount; syncSBCToWallet(promo.amount); }
-                activatedPromos[code]=true;
-                terminalLog.push({type:'user-text',text:'> ///'+code});
-                terminalLog.push({type:'success',text:'✓ Промокод активирован: '+promo.desc});
-                refreshUI();
-            }
-        } else { terminalLog.push({type:'user-text',text:'> ///'+code}); terminalLog.push({type:'error',text:'✗ Промокод не найден'}); }
-    } else terminalLog.push({type:'user-text',text:'> '+text});
-    if(terminalLog.length > 100) terminalLog = terminalLog.slice(-100);
-    renderTerminal(); saveGame();
-}
-
-// ========== КАСТОМ ==========
-function openCustomize(){
-    var html = '<h3>🎨 Внешний вид игры</h3>';
-    html += '<div class="custom-section"><div class="section-label">🎭 Пресет темы</div><div class="custom-grid">';
-    var themes = ['default','discord','apple','cyberpunk','matrix','sunset','ocean','forest','crimson','monochrome','rose','lime'];
-    for(var i=0;i<themes.length;i++){ var t=themes[i]; var sel=gameCustom.theme===t?' selected':''; html += '<div class="custom-preset preset-'+t+sel+'" data-theme="'+t+'"></div>'; }
-    html += '</div></div>';
-    html += '<div class="custom-section"><div class="section-label">🎨 Акцентный цвет</div>';
-    html += '<div style="display:flex;gap:8px;align-items:center;">';
-    html += '<input type="color" id="accentPicker" value="'+gameCustom.accentColor+'" style="width:50px;height:40px;border:none;border-radius:12px;cursor:pointer;background:transparent;">';
-    html += '<input type="text" id="accentText" value="'+gameCustom.accentColor+'" readonly style="flex:1;padding:10px 14px;border-radius:12px;border:1px solid rgba(0,0,0,0.1);background:rgba(255,255,255,0.7);font-family:var(--font-family-mono);font-size:0.85rem;outline:none;color:var(--text-primary);">';
-    html += '</div></div>';
-    html += '<div class="custom-section"><div class="section-label">🔤 Шрифт</div><div class="font-options">';
-    var fonts = [{id:'Inter',name:'Inter'},{id:'JetBrains Mono',name:'JetBrains'},{id:'Playfair Display',name:'Playfair'},{id:'Caveat',name:'Caveat'}];
-    for(var j=0;j<fonts.length;j++){ var f=fonts[j]; var fsel=gameCustom.fontFamily===f.id?' selected':''; html += '<div class="font-option'+fsel+'" data-font="'+f.id+'"><div class="font-preview">Aa</div><div class="font-name">'+f.name+'</div></div>'; }
-    html += '</div></div>';
-    html += '<div class="custom-section"><div class="section-label">⬜ Скругления</div><div class="slider-row"><label>Углы</label><input type="range" id="radiusSlider" min="0" max="40" value="'+gameCustom.borderRadius+'"><span class="slider-value" id="radiusVal">'+gameCustom.borderRadius+'px</span></div></div>';
-    html += '<div class="custom-section"><div class="section-label">💠 Стекло</div><div class="slider-row"><label>Размытие</label><input type="range" id="blurSlider" min="0" max="40" value="'+gameCustom.blurStrength+'"><span class="slider-value" id="blurVal">'+gameCustom.blurStrength+'px</span></div></div>';
-    html += '<div class="custom-section"><div class="section-label">🌑 Тени</div><div class="slider-row"><label>Сила</label><input type="range" id="shadowSlider" min="0" max="60" value="'+gameCustom.shadowStrength+'"><span class="slider-value" id="shadowVal">'+gameCustom.shadowStrength+'%</span></div></div>';
-    html += '<button class="btn-action btn-secondary-action" onclick="resetCustomization()" style="color:#e74c3c;">⟲ Сброс</button>';
-    els.customizeSheetContent.innerHTML = html;
-    openSheet(els.customizeSheet);
-    setTimeout(function(){
-        var presets = document.querySelectorAll('[data-theme]');
-        for(var i=0;i<presets.length;i++) presets[i].addEventListener('click', function(){ gameCustom.theme=this.dataset.theme; var theme=THEME_PRESETS[gameCustom.theme]; if(theme) gameCustom.accentColor=theme.accent; saveCustom(); applyTheme(); openCustomize(); });
-        var picker = $('accentPicker');
-        if(picker) picker.addEventListener('input', function(){ gameCustom.accentColor=this.value; $('accentText').value=this.value; saveCustom(); applyTheme(); });
-        var fontOpts = document.querySelectorAll('[data-font]');
-        for(var j=0;j<fontOpts.length;j++) fontOpts[j].addEventListener('click', function(){ gameCustom.fontFamily=this.dataset.font; saveCustom(); applyTheme(); openCustomize(); });
-        var rs = $('radiusSlider'); if(rs) rs.addEventListener('input', function(){ gameCustom.borderRadius=parseInt(this.value); $('radiusVal').textContent=this.value+'px'; saveCustom(); applyTheme(); });
-        var bs = $('blurSlider'); if(bs) bs.addEventListener('input', function(){ gameCustom.blurStrength=parseInt(this.value); $('blurVal').textContent=this.value+'px'; saveCustom(); applyTheme(); });
-        var ss = $('shadowSlider'); if(ss) ss.addEventListener('input', function(){ gameCustom.shadowStrength=parseInt(this.value); $('shadowVal').textContent=this.value+'%'; saveCustom(); applyTheme(); });
-    }, 50);
-}
-function resetCustomization(){
-    if(!confirm('Сбросить оформление игры?')) return;
-    gameCustom = { theme:'default', accentColor:'#6b4e9b', fontFamily:'Inter', borderRadius:32, blurStrength:24, shadowStrength:15 };
-    saveCustom(); applyTheme(); openCustomize();
-}
-
-// ========== ОБМЕННИК ==========
-function openExchange(){
-    var html = '<h3>🔄 Обменник SNN → SBC</h3>';
-    html += '<div style="text-align:center;font-size:0.75rem;color:var(--text-secondary);margin-bottom:12px;">Курс: 10 000 SNN = 1 SBC</div>';
-    html += '<div class="exchange-presets">';
-    html += '<div class="exchange-preset" data-preset="1"><span class="exchange-preset-left">1 SBC</span><span class="exchange-preset-right">10 000 SNN</span></div>';
-    html += '<div class="exchange-preset" data-preset="10"><span class="exchange-preset-left">10 SBC</span><span class="exchange-preset-right">100 000 SNN</span></div>';
-    html += '<div class="exchange-preset" data-preset="100"><span class="exchange-preset-left">100 SBC</span><span class="exchange-preset-right">1 000 000 SNN</span></div>';
-    html += '</div>';
-    html += '<div class="exchange-custom"><div class="input-with-label"><label>Сколько SNN обменять</label><input type="number" id="snnInput" min="0" placeholder="0"></div><div style="font-size:0.75rem;color:var(--text-secondary);text-align:center;margin-bottom:8px;">Получите: <b id="snnResult" style="color:var(--accent);">0 SBC</b></div></div>';
-    html += '<div class="exchange-custom"><div class="input-with-label"><label>Сколько SBC нужно</label><input type="number" id="sbcInput" min="0" placeholder="0"></div><div style="font-size:0.75rem;color:var(--text-secondary);text-align:center;margin-bottom:8px;">Потребуется: <b id="sbcResult" style="color:var(--accent);">0 SNN</b></div></div>';
-    html += '<button class="btn-action btn-primary-action" id="doExchangeBtn">💱 Обменять</button>';
-    els.exchangeSheetContent.innerHTML = html;
-    openSheet(els.exchangeSheet);
-    setTimeout(function(){
-        var presets = document.querySelectorAll('[data-preset]');
-        for(var i=0;i<presets.length;i++) presets[i].addEventListener('click', function(){ doExchange(parseInt(this.dataset.preset)); });
-        var snnInput = $('snnInput');
-        if(snnInput) snnInput.addEventListener('input', function(){ var snn=parseInt(this.value)||0; $('snnResult').textContent=Math.floor(snn/SBC_RATE)+' SBC'; $('sbcInput').value=''; $('sbcResult').textContent='0 SNN'; });
-        var sbcInput = $('sbcInput');
-        if(sbcInput) sbcInput.addEventListener('input', function(){ var s=parseInt(this.value)||0; $('sbcResult').textContent=(s*SBC_RATE).toLocaleString()+' SNN'; $('snnInput').value=''; $('snnResult').textContent='0 SBC'; });
-        var btn = $('doExchangeBtn');
-        if(btn) btn.addEventListener('click', function(){ var snnVal=parseInt($('snnInput').value)||0; var sbcVal=parseInt($('sbcInput').value)||0; if(snnVal>0) doExchangeBySNN(snnVal); else if(sbcVal>0) doExchange(sbcVal); });
-    }, 50);
-}
-function doExchange(sbcAmount){
-    var need = sbcAmount * SBC_RATE;
-    if(score < need){ alert('Недостаточно SNN\nНужно: '+need.toLocaleString()+'\nУ вас: '+Math.floor(score).toLocaleString()); return; }
-    score = round1(score - need);
-    sbc += sbcAmount;
-    totalExchanged += sbcAmount;
-    syncSBCToWallet(sbcAmount);
-    refreshUI(); closeAllSheets();
-    alert('✅ Обменяно на '+sbcAmount+' SBC');
-}
-function doExchangeBySNN(snnAmount){
-    var sbcAmount = Math.floor(snnAmount / SBC_RATE);
-    if(sbcAmount <= 0){ alert('Минимум '+SBC_RATE.toLocaleString()+' SNN'); return; }
-    doExchange(sbcAmount);
-}
-
-// ========== КОШЕЛЁК ==========
-function openWallet(){
-    var html = '';
-    if(!walletId){
-        html += '<h3>👛 Кошелёк</h3>';
-        html += '<p style="text-align:center;margin-bottom:16px;">Подключить кошелёк?</p>';
-        html += '<button class="btn-action btn-primary-action" onclick="linkWalletAction()">Подключить</button>';
-        html += '<button class="btn-action btn-secondary-action" onclick="closeAllSheets()">Отмена</button>';
-    } else {
-        html += '<h3>💸 Перевод SBC</h3>';
-        html += '<p style="text-align:center;font-family:var(--font-family-mono);font-size:0.8rem;">'+walletId.substring(0,14)+'...</p>';
-        html += '<p style="text-align:center;margin:8px 0;">Доступно: <b>'+sbc+' SBC</b></p>';
-        html += '<div class="edit-field"><label>Сумма</label><input type="number" id="transferAmount" min="1" max="'+sbc+'" value="1"></div>';
-        html += '<button class="btn-action btn-primary-action" onclick="doTransferToWallet()">Отправить</button>';
-        html += '<button class="btn-action btn-secondary-action" onclick="closeAllSheets()">Закрыть</button>';
-    }
-    els.walletSheetContent.innerHTML = html;
-    openSheet(els.walletSheet);
-}
-function doTransferToWallet(){
-    var amt = parseInt($('transferAmount').value)||0;
-    if(amt>0 && amt<=sbc){ sbc -= amt; syncSBCToWallet(amt); refreshUI(); closeAllSheets(); }
-}
-function linkWalletAction(){
-    var url = window.location.href.split('?')[0];
-    var ret = encodeURIComponent(url);
-    var isAndroid = /android/i.test(navigator.userAgent);
-    if(isAndroid) window.open(WALLET_PATH+'?action=link&app=snncombat&return='+ret, '_blank');
-    else alert('Откройте: '+WALLET_PATH);
-}
-function openSettings(){ openSheet(els.settingsSheet); }
-
-// ========== ХЕДЕР ==========
-var scrollRaf = null;
-function updateHeaderOnScroll(){
-    if(scrollRaf) return;
-    scrollRaf = requestAnimationFrame(function(){
-        var scrollY = window.scrollY || document.documentElement.scrollTop;
-        var wasScrolled = els.headerWrapper.classList.contains('scrolled');
-        var shouldScroll = scrollY > 30;
-        if(shouldScroll !== wasScrolled){
-            if(shouldScroll) els.headerWrapper.classList.add('scrolled');
-            else els.headerWrapper.classList.remove('scrolled');
-        }
-        scrollRaf = null;
-    });
-}
-
-// ========== СИНХРОН ==========
-function syncWalletFromStorage(){
-    try{
-        var raw = localStorage.getItem('snn_wallet_data');
-        if(!raw){ walletId=null; walletToken=null; return; }
-        var w = JSON.parse(raw);
-        if(w.connections && w.connections['snncombat'] && w.connections['snncombat'].active){
-            walletId = w.id; walletToken = w.connections['snncombat'].token;
-        } else { walletId=null; walletToken=null; }
-    }catch(e){ walletId=null; walletToken=null; }
-}
-function checkIncomingTransfers(){
-    var key = 'snn_transfer_snncombat';
-    var transfers = JSON.parse(localStorage.getItem(key)||'[]');
-    if(transfers.length === 0) return 0;
-    var total = 0;
-    for(var i=0;i<transfers.length;i++) total += transfers[i].amount;
-    sbc += total;
-    localStorage.removeItem(key);
-    return total;
-}
-
-// ========== АДМИН ==========
-window.adminAddSNN = function(a){ score=round1(score+a); totalExperience=round1(totalExperience+a); totalEarned=round1(totalEarned+a); refreshUI(); };
-window.adminAddSBC = function(a){ sbc+=a; syncSBCToWallet(a); refreshUI(); };
-window.adminSetStreak = function(s){ streak=s; updateStreakUI(); };
-window.adminLucky = function(){ if(!isLuckyActive) triggerLuckyClick(); };
-window.adminJackpot = function(){ if(!isLuckyActive) triggerLuckyClick(10000); };
-window.adminGiveUsername = function(name){
-    profile.username = name;
-    profile.usernameExpires = getCurrentTime() + 180*24*60*60*1000;
-    saveProfile(); updateProfileBar();
-    alert('Выдан: '+name+'.sbk');
-};
-
-window.openProfile = openProfile;
-window.openProfileEdit = openProfileEdit;
-window.saveProfileEdit = saveProfileEdit;
-window.openProfileStyle = openProfileStyle;
-window.editAvatar = editAvatar;
-window.editBanner = editBanner;
-window.clearAvatar = clearAvatar;
-window.clearBanner = clearBanner;
-window.openGameInfo = openGameInfo;
-window.openAddressMenu = openAddressMenu;
-window.checkUsername = checkUsername;
-window.renewAddress = renewAddress;
-window.releaseAddress = releaseAddress;
-window.openSbkCard = openSbkCard;
-window.openCustomize = openCustomize;
-window.resetCustomization = resetCustomization;
-window.openExchange = openExchange;
-window.openWallet = openWallet;
-window.doTransferToWallet = doTransferToWallet;
-window.linkWalletAction = linkWalletAction;
-window.closeAllSheets = closeAllSheets;
-window.resetGame = function(){
-    if(confirm('Сбросить весь игровой прогресс?')){
-        score=0; totalExperience=0; clickPower=1;
-        upgrade1Level=0; batteryLevel=1; offlineLevel=0;
-        sbc=0; currentLevel=1; limitUpgraded=false; maxUpgradeCost=100000;
-        energy=getBatteryConfig(1).max; rechargeCooldown=0;
-        totalClicks=0; totalEarned=0; totalExchanged=0; totalPlaytime=0;
-        streak=0; luckyCount=0; bigWinCount=0; maxMultiplier=0;
-        sessionStart = Date.now();
-        activatedPromos = {};
-        terminalLog = [
-            { type:'system', text:'SNN Combat Terminal v1.0.0' },
-            { type:'info', text:'Прогресс сброшен' },
-            { type:'info', text:'Введите ///КОД для промокода' }
-        ];
-        refreshUI(); closeAllSheets();
-    }
-};
-
-// ========== INIT ==========
-async function init(){
-    await fetchServerTime();
-    loadGame();
-    syncWalletFromStorage();
-    checkIncomingTransfers();
-
-    var now = getCurrentTime();
-    var elapsedSec = Math.floor((now-lastSaveTime)/1000);
-    var offlineM = getOfflineMultiplier(currentLevel);
-    var offMod = getOfflineModule(offlineLevel);
-
-    // Офлайн награда капает после 10 минут (600 сек)
-    if(elapsedSec > 600 && offlineLevel >= 0 && batteryLevel > 0){
-        var effElapsed = elapsedSec - 600;
-        var maxS = offMod.hours * 3600;
-        var effS = Math.min(effElapsed, maxS);
-        var baseRate = 0.2*batteryLevel;
-        // Множитель офлайн-модуля
-        var offlineCoins = Math.floor(effS * baseRate * offMod.mult);
-        if(offlineCoins > 0){
-            score = round1(score+offlineCoins);
-            totalExperience = round1(totalExperience+offlineCoins);
-            totalEarned = round1(totalEarned+offlineCoins);
-            var hrs = Math.floor(effS/3600);
-            var mins = Math.floor((effS%3600)/60);
-            els.offlineTime.textContent = hrs+'ч '+mins+'м';
-            els.offlineMult.textContent = offMod.mult.toFixed(1);
-            els.offlineEarnings.textContent = formatNumber(offlineCoins);
-            els.offlineBanner.style.display = 'block';
-            setTimeout(function(){ els.offlineBanner.style.display='none'; },10000);
-        }
-    }
-    if(elapsedSec > 0){
-        var cfg2 = getBatteryConfig(batteryLevel);
-        energy = Math.min(cfg2.max, energy + elapsedSec*getBatteryRate(batteryLevel));
-    }
-    if(elapsedSec > 0) totalPlaytime += elapsedSec;
-    sessionStart = Date.now();
-    lastSaveTime = now;
-
-    var params = new URLSearchParams(window.location.search);
-    if(params.get('wallet_token') && params.get('wallet_id')){
-        walletToken = params.get('wallet_token');
-        walletId = params.get('wallet_id');
-        window.history.replaceState({},'',window.location.pathname);
-    }
-
-    applyTheme();
-    applyUpgradesCollapsed();
-    refreshUI();
-    startStreakDecay();
-
-    els.clickBtn.addEventListener('click', handleClick);
-    els.rechargeBtn.addEventListener('click', rechargeBattery);
-    els.upgrade1Btn.addEventListener('click', buyUpgrade1);
-    els.batteryUpgradeBtn.addEventListener('click', upgradeBattery);
-    els.offlineUpgradeBtn.addEventListener('click', upgradeOffline);
-    els.buyLimitUpgradeBtn.addEventListener('click', buyLimitUpgrade);
-    // Сворачивание магазина
-    els.upgradesHeader.addEventListener('click', toggleUpgrades);
-
-    $('btnSettings').addEventListener('click', openSettings);
-    $('btnWallet').addEventListener('click', openWallet);
-    $('btnProfile').addEventListener('click', openProfile);
-    els.headerLogo.addEventListener('click', openGameInfo);
-    els.profileBar.addEventListener('click', openProfile);
-    // Тап на адрес — карточка .sbk
-    els.profileBarAddress.addEventListener('click', function(e){
-        e.stopPropagation();
-        openSbkCard();
-    });
-    els.overlayBackdrop.addEventListener('click', closeAllSheets);
-    $('openExchangeBtn').addEventListener('click', openExchange);
-
-    // ЛАКИ-СКИП — тап на overlay
-    els.luckyOverlay.addEventListener('click', function(e){
-        if(!isLuckyActive) return;
-        // Если рулетка уже активна или результат показан — не скипаем рулетку вручную
-        if(els.bigwinWindow.classList.contains('show')){
-            // Результат — тап закрывает
-            endLucky();
-            return;
-        }
-        if(els.luckyRoulette.classList.contains('show') && luckyStep >= 3){
-            // Рулетка активна — принудительно завершаем
-            clearLuckyTimers();
-            // Мгновенная остановка рулетки
-            var fp = 1;
-            if(luckyCurrentMultiplier>5000) fp = 3;
-            else if(luckyCurrentMultiplier>1000) fp = 2;
-            els.rouletteCurrent.textContent = '×'+luckyCurrentMultiplier;
-            els.rouletteNext.textContent = '×'+luckyCurrentMultiplier;
-            els.roulettePrev.textContent = '×'+luckyCurrentMultiplier;
-            els.luckyRoulette.classList.remove('mode-purple','mode-gold');
-            if(fp === 2) els.luckyRoulette.classList.add('mode-purple');
-            if(fp === 3) els.luckyRoulette.classList.add('mode-gold');
-            vibrate([60,40,100]);
-            setTimeout(function(){ showResult(luckyCurrentMultiplier, fp); }, 150);
-            return;
-        }
-        // Иначе — пошаговый скип
-        skipLucky();
-    });
-
-    window.addEventListener('scroll', updateHeaderOnScroll, {passive:true});
-    updateHeaderOnScroll();
-
-    window.addEventListener('keydown', function(e){
-        if(e.code==='Space' && !e.repeat && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA'){
-            e.preventDefault();
-            if(isLuckyActive){
-                els.luckyOverlay.click();
-                return;
-            }
-            handleClick();
-            els.clickBtn.style.transform = 'scale(0.97)';
-            setTimeout(function(){ els.clickBtn.style.transform=''; },100);
-        }
-    });
-
-    window.addEventListener('storage', function(e){
-        if(e.key === 'snn_wallet_data'){
-            syncWalletFromStorage();
-            checkIncomingTransfers();
-            refreshUI();
-        }
-    });
-
-    // Игровой цикл — зарядка батарейки через 3 сек после последнего клика
-    setInterval(function(){
-        var cfg = getBatteryConfig(batteryLevel);
-        var timeSinceClick = Date.now() - lastClickTime;
-        // Зарядка только если прошло 3+ сек с последнего клика
-        if(energy < cfg.max && timeSinceClick >= 3000 && !isLuckyActive){
-            energy = Math.min(cfg.max, energy + getBatteryRate(batteryLevel));
-            refreshUI();
-        }
-        if(rechargeCooldown > 0 && getCurrentTime() >= rechargeCooldown){
-            rechargeCooldown = 0;
-            refreshUI();
-        }
-        saveGame();
-    }, 1000);
-
-    console.log('✅ SNN Combat v1.0.0 загружен');
-}
-
-init();
-})();
-</script>
-</body>
-</html>
+        v
